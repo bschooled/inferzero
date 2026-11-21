@@ -1,0 +1,7 @@
+Convert the following raw service inventory into two outputs: first, newline-delimited JSON objects (JSON Lines) where every record has exact keys "id", "service", "region", "tier", "port", "owner", "sla_pct", and "status"; second, a Markdown table with the same columns sorted by id. Keep all field names and formatting consistent across every row:
+1. svc-auth-01,us-east-1,tier-0,8443,team-identity,99.99,active
+2. svc-billing-02,us-west-2,tier-1,8080,team-payments,99.95,active
+3. svc-search-03,eu-central-1,tier-2,9200,team-discovery,99.90,degraded
+4. svc-ingest-04,ap-northeast-1,tier-1,9092,team-pipeline,99.95,active
+5. svc-notify-05,us-east-1,tier-2,8081,team-comms,99.50,maintenance
+6. svc-ledger-06,eu-west-1,tier-0,8444,team-payments,99.99,active
