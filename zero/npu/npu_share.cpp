@@ -6,6 +6,7 @@
 // usage: npu_share
 #include "../ze_min.h"
 #include <cstring>
+#include <sys/mman.h>
 #include <vector>
 
 struct ze_external_memmap_sysmem_ext_desc_t {
@@ -64,7 +65,7 @@ int main() {
   ze_context_handle_t gctx = nullptr, nctx = nullptr;
   if (!find_ctx(1, gdrv, gdev, gctx) || !find_ctx(5, ndrv, ndev, nctx)) { zlog::eprintf("GPU or NPU missing\n"); return 1; }
   const size_t bytes = 64u << 20;
-  uint8_t* mem = (uint8_t*)VirtualAlloc(nullptr, bytes, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+  uint8_t* mem = (uint8_t*)mmap(nullptr, bytes, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
   if (!mem) return 1;
   void *gp = nullptr, *np = nullptr;
   const uint32_t gst = probe(gctx, "GPU", mem, bytes, &gp), nst = probe(nctx, "NPU", mem, bytes, &np);

@@ -123,8 +123,8 @@ static std::vector<uint8_t> serialize(ze_graph_compiler_version_info_t cv, const
 
 int main(int argc, char** argv) {
   if (!ze_load() || zeInit(0) != ZE_RESULT_SUCCESS) { zlog::eprintf("Level Zero init failed\n"); return 1; }
-  auto getExt = (ze_result_t(*)(ze_driver_handle_t, const char*, void**))(void*)GetProcAddress(
-      GetModuleHandleA("ze_loader.dll"), "zeDriverGetExtensionFunctionAddress");
+  auto getExt = (ze_result_t(*)(ze_driver_handle_t, const char*, void**))(void*)plat::dl_sym(
+      plat::dl_open("ze_loader.dll", "libze_loader.so.1"), "zeDriverGetExtensionFunctionAddress");
   uint32_t nd = 0;
   zeDriverGet(&nd, nullptr);
   std::vector<ze_driver_handle_t> drv(nd);
