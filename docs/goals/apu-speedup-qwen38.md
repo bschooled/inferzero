@@ -22,10 +22,14 @@ is re-measured after every merge. The repo is the record: commits in
   the serial MTP draft chain `zero/engine_drafters.h:502` sets pass time; Q4 raw is the
   BW-bound reference at 66.5 GB/s) + `APPENDIX-gufo.md` / `APPENDIX-strata.md`
   (cited sibling-engine analyses; clones at `~/.hermes/cache/scratch/{gufo,Strata}`).
-- **Measurement discipline (non-negotiable):** ≥3 repeats, medians, 60 s cooldown
-  between runs (MTL clocks sag); diverse prompts (SPEED-Bench-style client first —
-  single tg300 sweeps cannot resolve 10% effects); report tok/s AND bytes/pass AND
-  effective GB/s for every result so each number says which regime moved.
+- **Measurement discipline — two-phase (user-authorized 2026-11-21, replaces
+  run-everything-3x):** Phase A **screen** = 1 repeat, tg~150–200, 2–4 prompts, 30 s
+  cooldown — find ≥5% signal cheaply; never burn multi-hour sweeps on dead-end ideas.
+  Phase B **confirm** = ≥3 repeats, tg~300, 60 s cooldown (MTL clocks sag), medians —
+  reserved for promising candidates, champion-ladder re-measures after merges, and
+  final records. Diverse prompts always (single tg300 sweeps cannot resolve 10%
+  effects and lie on repetitive text); report tok/s AND bytes/pass AND effective GB/s
+  for every result so each number says which regime moved.
 - **Regimes:** move the overhead-bound champion by cutting draft-chain/verify overhead
   (P2, P3, P4); move the BW-bound Q4 path by alignment/padding (P1).
 - **SKIP LIST (measured negatives — do not re-litigate):** non-temporal/streaming loads
