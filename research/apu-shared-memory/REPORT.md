@@ -89,7 +89,7 @@ Each item: what → evidence → expectation → effort.
 
 ## 7. Reproducing this work
 
-- Node: `bschooley@192.168.50.48` (Spectre x360 16, 155H, 32 GB). `~/inferzero` (upstream `rizagp/inferzero`), models in `~/models`, champion launcher in `bench/champion.sh`.
+- Node: `bschooley@192.168.50.48` (Spectre x360 16, 155H, 32 GB). `~/inferzero` (upstream `rizagp/inferzero`), models in `~/models`, champion launcher at `champion.sh` in this directory. (`results/*.log` are force-added research evidence — normally gitignored, kept here deliberately.)
 - Every script in `bench/` is standalone; `results/` holds the raw server logs behind §2 (grep `chatcmpl`). `bench/rbw.c`: `g++ -O2 -fopenmp rbw.c -o rbw && ./rbw 2048 3`. `gpu_bench` is built from this repo.
 - Known-good environment: GPU driver 26.40.40196, kernel 6.17, GPU clocks hold 81% sustained under bench load.
 - The two appendix analyses were produced against depth-1 clones of `gufo-org/gufo` and `Niko1221/Strata` at 2026-11-21 `main`; their `file:line` citations include the load-bearing ones re-verified by the author (padding, MTP cost table, INTEL_ARC gap, alignment probe, batch-launch switches).
@@ -104,4 +104,4 @@ Each item: what → evidence → expectation → effort.
 
 ---
 
-*File map:* `REPORT.md` (this) · `APPENDIX-gufo.md`, `APPENDIX-strata.md` (full cited analyses) · `bench/` (all experiment scripts + `champion.sh`, `npu_probe2.cpp`) · `results/` (raw logs). Related repo state: Linux NPU port patches in `zero/npu/` (this repo's working tree), team branches `tiered-placement`, `xehpc-sweep`, `a770-gemm-xw8-pipeline` (merged history relevant to §6.6).
+*File map:* `REPORT.md` (this) · `APPENDIX-gufo.md`, `APPENDIX-strata.md` (full cited analyses) · `bench/` (all experiment scripts) · `champion.sh` (tuned node launcher) · `results/` (raw logs). Related repo state: Linux NPU port + `zero/npu/npu_probe2.cpp` in the working tree, team branches `tiered-placement`, `xehpc-sweep`, `a770-gemm-xw8-pipeline` (merged history relevant to §6.6).

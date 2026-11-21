@@ -1,0 +1,32 @@
+2026-11-20 23:33:08.189 I inferzero built from source (Nov 20 2026)
+2026-11-20 23:33:08.190 I system: CachyOS, kernel 7.3.5-2-cachyos, Intel(R) Core(TM) Ultra 7 155H, 22 logical processors, RAM 30.7 GiB (29.2 free)
+2026-11-20 23:33:08.190 I ARC_* switches set: none
+=== Rusticl warning: Patched Mesa libclc not detected. Upstream libclc may contain known bugs or breaking changes and isn't guaranteed to work reliably. Please visit https://gitlab.freedesktop.org/karolherbst/mesa-libclc for more information. ===
+2026-11-20 23:33:08.434 I GPU: Intel(R) Arc(TM) Graphics, driver 26.40.40196, 128 EUs, 2250 MHz, 28.4 GiB (shared with the CPU), XMX no, 8- and 16-lane sub-groups
+2026-11-20 23:33:08.434 I inferzero-server: loading /home/bschooley/models/Qwen3.8-40B-Ultimate-Heretic-Uncn-Turbo-Brilli-50x-AGI-NEO-MTP-IQ2_M.gguf
+progress: 0 % loading the model weights
+progress: 6 % loading the model weights
+progress: 11 % loading the model weights
+progress: 16 % loading the model weights
+progress: 21 % loading the model weights
+progress: 26 % loading the model weights
+progress: 31 % loading the model weights
+progress: 36 % loading the model weights
+progress: 41 % loading the model weights
+progress: 46 % loading the model weights
+progress: 51 % loading the model weights
+progress: 56 % loading the model weights
+progress: 61 % loading the model weights
+progress: 66 % loading the model weights
+progress: 71 % loading the model weights
+progress: 76 % loading the model weights
+progress: 81 % loading the model weights
+progress: 86 % loading the model weights
+progress: 91 % loading the model weights
+progress: 96 % loading the model weights
+progress: 100 % loading the model weights
+2026-11-20 23:33:29.442 I loaded in 20.8 s | 96 layers | ctx 4096 | chunk 4096 | GPU 16.58 GiB | weights W8 just-in-time
+2026-11-20 23:33:29.442 I model: qwen35, 96 layers, embedding 5120, heads 24 / kv 4, head 256, ffn 17408, vocab 248320, trained ctx 262144, file 13.53 GiB, IQ2_M
+progress: -1 % warming up the kernels (first start after an update: up to a minute)
+2026-11-20 23:33:50.261 I serving /home/bschooley/models/Qwen3.8-40B-Ultimate-Heretic-Uncn-Turbo-Brilli-50x-AGI-NEO-MTP-IQ2_M.gguf as "Qwen3.8-40B-Ultimate-Heretic-Uncn-Turbo-Brilli-50x-AGI-NEO-MTP-IQ2_M"
+2026-11-20 23:33:50.264 I listening on http://127.0.0.1:8090  (OpenAI API at /v1, web UI at /)

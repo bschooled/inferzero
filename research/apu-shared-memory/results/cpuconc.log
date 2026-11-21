@@ -1,0 +1,6 @@
+array 1024 MiB, max threads 22
+threads  1:    26.8 GB/s
+threads  2:    34.6 GB/s
+threads  4:    46.7 GB/s
+threads  8:    60.2 GB/s
+threads 16:    67.5 GB/s

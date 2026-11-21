@@ -1,0 +1,40 @@
+2026-11-20 22:37:05.388 I inferzero built from source (Nov 20 2026)
+2026-11-20 22:37:05.389 I system: CachyOS, kernel 7.3.5-2-cachyos, Intel(R) Core(TM) Ultra 7 155H, 22 logical processors, RAM 30.7 GiB (29.2 free)
+2026-11-20 22:37:05.389 I ARC_* switches set: none
+=== Rusticl warning: Patched Mesa libclc not detected. Upstream libclc may contain known bugs or breaking changes and isn't guaranteed to work reliably. Please visit https://gitlab.freedesktop.org/karolherbst/mesa-libclc for more information. ===
+2026-11-20 22:37:05.568 I GPU: Intel(R) Arc(TM) Graphics, driver 26.40.40196, 128 EUs, 2250 MHz, 28.4 GiB (shared with the CPU), XMX no, 8- and 16-lane sub-groups
+2026-11-20 22:37:05.568 I inferzero-server: loading /home/bschooley/models/Qwen3.8-40B-Ultimate-Heretic-Uncn-Turbo-Brilli-50x-AGI-NEO-MTP-Q4_K_S.gguf
+2026-11-20 22:37:08.522 I --ctx auto: 0 tokens with resident weights (trained 262144; 60.98 GiB of GPU memory without the context, 61.23 GiB with it, device 28.42 GiB)
+2026-11-20 22:37:09.295 I --ctx auto: 28672 tokens with just-in-time weights (trained 262144; 22.99 GiB of GPU memory without the context, 24.82 GiB with it, device 28.42 GiB)
+progress: 0 % loading the model weights
+progress: 5 % loading the model weights
+progress: 10 % loading the model weights
+progress: 15 % loading the model weights
+progress: 20 % loading the model weights
+progress: 25 % loading the model weights
+progress: 30 % loading the model weights
+progress: 35 % loading the model weights
+progress: 40 % loading the model weights
+progress: 45 % loading the model weights
+progress: 50 % loading the model weights
+progress: 55 % loading the model weights
+progress: 60 % loading the model weights
+progress: 65 % loading the model weights
+progress: 69 % loading the model weights
+progress: 73 % loading the model weights
+progress: 78 % loading the model weights
+progress: 83 % loading the model weights
+progress: 88 % loading the model weights
+progress: 93 % loading the model weights
+progress: 96 % loading the model weights
+progress: 100 % loading the model weights
+2026-11-20 22:37:36.416 I loaded in 25.4 s | 96 layers | ctx 28672 in each of 2 slots | chunk 4096 | GPU 26.69 GiB | weights W8 just-in-time
+2026-11-20 22:37:36.417 I model: qwen35, 96 layers, embedding 5120, heads 24 / kv 4, head 256, ffn 17408, vocab 248320, trained ctx 262144, file 21.16 GiB, Q4_K_S
+2026-11-20 22:37:36.417 I memory (--ctx auto): device 28.42 GiB = kept free 0.50 + snapshots 0.44 + encoders / speech 0.00 + weights 20.53 + MTP / drafter 0.49 + buffers 1.98 + context 1.83 (one slot, one GPU) (50.8 MiB per 1K tokens)
+progress: -1 % warming up the kernels (first start after an update: up to a minute)
+2026-11-20 22:37:53.107 I serving /home/bschooley/models/Qwen3.8-40B-Ultimate-Heretic-Uncn-Turbo-Brilli-50x-AGI-NEO-MTP-Q4_K_S.gguf as "Qwen3.8-40B-Ultimate-Heretic-Uncn-Turbo-Brilli-50x-AGI-NEO-MTP-Q4_K_S"
+2026-11-20 22:37:53.108 I listening on http://127.0.0.1:8090  (OpenAI API at /v1, web UI at /)
+2026-11-20 22:38:39.841 I [chatcmpl-arc1] prompt 551 tok (cached 0) 18.1 s (30.4 t/s) | gen 160 tok 27.7 s (5.78 t/s) | length | MTP 114/210 drafts accepted | first token 18.14 s | context 711 of 28672 | slot 0
+2026-11-20 22:38:39.843 I POST /v1/chat/completions 200 1.5 KB 45821 ms 127.0.0.1
+2026-11-20 22:39:19.859 I [chatcmpl-arc2] prompt 551 tok (cached 42) 12.0 s (42.3 t/s) | gen 160 tok 28.0 s (5.72 t/s) | length | MTP 111/198 drafts accepted | first token 12.03 s | context 711 of 28672 | slot 0
+2026-11-20 22:39:19.862 I POST /v1/chat/completions 200 1.5 KB 85840 ms 127.0.0.1
