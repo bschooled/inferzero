@@ -55,7 +55,9 @@ struct ZKernel {
   struct Arg { uint8_t sz = 0; bool set = false; uint32_t gen = 0; unsigned char v[16]; };
   std::vector<Arg> args;
 };
-struct ZProg { ze_module_handle_t m; bool indirect = false; std::string opts; };  // indirect: built with -DXCACHE (see kernel())
+// indirect: built with -DXCACHE (see kernel()); bin_bytes: the native binary's size (bench/xw_peak --all: the code a
+// variant compiles to, a measure of its instructions)
+struct ZProg { ze_module_handle_t m; bool indirect = false; std::string opts; size_t bin_bytes = 0; };
 typedef ZMem* cl_mem;
 typedef ZKernel* cl_kernel;
 typedef ZProg* cl_program;
@@ -1358,6 +1360,7 @@ struct ClRt {
     ze_module_desc_t md{ZE_STYPE_MODULE_DESC, nullptr, 1 /* native */, bin.size(), bin.data(),
                         big_grf ? "-ze-opt-large-register-file" : "", nullptr};
     ZProg* p = new ZProg{};
+    p->bin_bytes = bin.size();
     p->indirect = opts.find("-DXCACHE") != std::string::npos;
     p->opts = opts;
     ze_module_build_log_handle_t log = nullptr;
