@@ -814,6 +814,7 @@
   // hist: the tokens before `tok` (positions 0 .. pos - 1, the accepted drafts included). With opt.copy_draft, when the
   // last tokens up to `tok` appeared earlier in it, the tokens that followed there are the drafts (copy drafting, R1)
   std::vector<int> mtp_draft(int tok, int max_drafts, const std::vector<int>* hist = nullptr) {
+    busy_begin(1);
     copy_used_ = false;
     if (hist && copy_on()) {
       const int md = std::clamp(max_drafts, 1, std::min(this->max_drafts(), std::max(1, ctx - pos - 1)));
@@ -822,6 +823,7 @@
         dfl_used_ = false;
         copy_used_ = true;
         if (mtp_block_) mtp_sync_rows(tok);  // (the block's KV rows of the pending tokens and `tok`, as its drafts would)
+        busy_end_draft((int)cd.size(), true);
         return cd;
       }
     }
@@ -830,12 +832,16 @@
       if (mtp_block_) mtp_sync_rows(tok);
       max_drafts = std::clamp(max_drafts, 1, std::clamp(opt.mtp_drafts, 1, std::min(kMaxDrafts, dfl_B_ - 1)));
       if (pos + 1 + max_drafts > ctx) max_drafts = std::max(1, ctx - pos - 1);
-      return dflash_draft(tok, max_drafts);
+      auto dr = dflash_draft(tok, max_drafts);
+      busy_end_draft((int)dr.size(), false);
+      return dr;
     }
     if (gemma_mtp_) {
       max_drafts = std::clamp(max_drafts, 1, std::clamp(opt.mtp_drafts, 1, this->max_drafts()));
       if (pos + 1 + max_drafts > ctx) max_drafts = std::max(1, ctx - pos - 1);
-      return gemma_draft(tok, max_drafts);
+      auto dr = gemma_draft(tok, max_drafts);
+      busy_end_draft((int)dr.size(), false);
+      return dr;
     }
     const size_t E4 = mtp_hw() * 4;  // (h rows: Flash Next hc * E)
     std::vector<int> toks = pend_toks_;
@@ -863,12 +869,14 @@
       mtp_rows(&d, mtp_h_, 1, pos + 1 + k, true, mtp_h_);
     }
     collect_profile();
+    busy_end_draft((int)drafts.size(), false);
     return drafts;
   }
   // Main-model pass over [tok, drafts...] at positions pos, pos+1, ... Returns the logits of every row (row i
   // predicts the token after row i's token). The DeltaNet states after each draft-free prefix are kept so that
   // verify_done() can drop rejected drafts.
   const std::vector<float>& verify(int tok, const std::vector<int>& drafts) {
+    busy_begin(2);
     const int T = 1 + (int)drafts.size();
     if (drafts.empty() || (int)drafts.size() > max_drafts()) throw std::runtime_error("verify: too many drafts");
     if (pos + T > ctx) throw std::runtime_error("context overflow");
@@ -892,10 +900,12 @@
                                  0, nullptr, nullptr));
     if (pos > written_hi_) written_hi_ = pos;
     collect_profile();
+    busy_end_verify();
     return spec_logits_host_;
   }
   // The first `accepted` drafts of the last verify() turned out right; the rest are dropped.
   void verify_done(int accepted) {
+    busy_begin(3);
     const size_t E4 = mtp_hw() * 4;  // (h rows: Flash Next hc * E)
     const cl_mem dfl_src = vrows_ ? dfl_vrows_ : nullptr;  // (a batched pass: the slot's own copy of its rows)
     vrows_ = false;
@@ -924,6 +934,7 @@
     CL_CHECK(clEnqueueCopyBuffer(cl_.queue, hver_, hlast_, accepted * E4, 0, E4, 0, nullptr, nullptr));
     if (gemma_mtp_) {  // the drafter keeps no state of its own
       last_drafts_.clear();
+      busy_end_done(accepted);
       return;
     }
     if (dfl_) {  // DFlash: the context of the token and the accepted drafts (rows 0 .. accepted of the pass)
@@ -935,6 +946,7 @@
       }
       if (!mtp_block_) {
         last_drafts_.clear();
+        busy_end_done(accepted);
         return;
       }
     }
@@ -942,4 +954,5 @@
     pend_toks_.assign(last_drafts_.begin(), last_drafts_.begin() + accepted);
     if (accepted) CL_CHECK(clEnqueueCopyBuffer(cl_.queue, hver_, hpend_, 0, 0, accepted * E4, 0, nullptr, nullptr));
     last_drafts_.clear();
+    busy_end_done(accepted);
   }

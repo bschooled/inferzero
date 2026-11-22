@@ -299,6 +299,7 @@ __kernel void rd_strip(__global const uint* p, __global uint* out, int per_item)
 
  private:
   void release_all() {
+    busy_report();
     if (zrt::D().cl) clFinish(cl_.queue);  // (init may have failed before the runtime existed: nothing to wait for)
     // (a split model's pipelined sums, ARC_TP_PIPE: copies still queued after a failure read tp_h_ and host memory;
     //  they drain once the compute list has: every wait of that list comes after its signal)
@@ -572,6 +573,7 @@ __kernel void rd_strip(__global const uint* p, __global uint* out, int per_item)
       zlog::eprintf("inferzero: %d layer matrices keep their decoded W8 copy resident (%.2f GiB, ARC_W8_PARTIAL_GB); the "
                     "rest are decoded just in time\n", w8_part_n_, w8_part_bytes_ / 1073741824.0);
     reset();
+    busy_active_ = zrt::gpu_busy_on();
   }
 
  public:
@@ -588,6 +590,10 @@ __kernel void rd_strip(__global const uint* p, __global uint* out, int per_item)
     batch_.clear();
     dfl_cap_lo_ = dfl_cap_base_ = dfl_cap_end_ = 0;
     nc_lo_ = nc_hi_ = -1;
+    busy_phase_ = 0;
+    for (auto& [_, e] : busy_evs_) clReleaseEvent(e);
+    busy_evs_.clear();
+    busy_wins_.clear();
     if (hlast_) fill(hlast_, mtp_hw() * 4);
     for (auto& L : layers_)
       if (hp.recurrent(L.il)) {
@@ -622,6 +628,8 @@ __kernel void rd_strip(__global const uint* p, __global uint* out, int per_item)
   }
   const std::vector<float>& forward(const int* tokens, int n) {
     TP_MIRROR(forward(tokens, n), TpMirror::kLogits, 0);
+    const bool busy_ar = busy_active_ && busy_phase_ == 0 && n == 1 && !has_mtp;
+    if (busy_ar) busy_begin(4);
     if (!pp_last()) pp_out_->assign((size_t)n * hp.hce(), 0.0f);  // (a stage before the last: its rows, not logits)
     if (pos + n > ctx) throw std::runtime_error("context overflow");
     if (has_mtp) flush_mtp_pending();
@@ -683,6 +691,7 @@ __kernel void rd_strip(__global const uint* p, __global uint* out, int per_item)
     CL_CHECK(clEnqueueReadBuffer(cl_.queue, logits_, CL_TRUE, 0, (size_t)n_logits() * 4, logits_host_.data(), 0,
                                  nullptr, nullptr));
     collect_profile();
+    if (busy_ar) busy_end_ar();
     return logits_host_;
   }
 
@@ -931,6 +940,8 @@ __kernel void rd_strip(__global const uint* p, __global uint* out, int per_item)
       }
       forward(&tok, 1);
       reset();
+      busy_active_ = zrt::gpu_busy_on();
+      busy_wins_.clear();
       return false;
     }
     std::vector<int> t(std::max(nwarm, 8), tok);  // (the 2-8 row passes below read up to 8: a context under 20 made nwarm < 8)
@@ -961,6 +972,8 @@ __kernel void rd_strip(__global const uint* p, __global uint* out, int per_item)
       if (pos + 2 < ctx) mtp_draft(tok, 1);
     }
     reset();
+    busy_active_ = zrt::gpu_busy_on();
+    busy_wins_.clear();
     dfl_ema_ = 4.0;
     dfl_wait_ = 0;
     dfl_gap_ = 8;
@@ -1128,20 +1141,177 @@ __kernel void rd_strip(__global const uint* p, __global uint* out, int per_item)
   // ---------------------------------------------------------------- dispatch helpers
   void run(const char* name, cl_kernel k, int dims, const size_t* gws, const size_t* lws) {
     cl_event e = nullptr;
-    CL_CHECK(clEnqueueNDRangeKernel(cl_.queue, k, dims, nullptr, gws, lws, 0, nullptr, profile ? &e : nullptr));
+    const bool want_busy = busy_active_ && busy_phase_ > 0 && !profile;
+    const bool want_ev = profile || want_busy;
+    CL_CHECK(clEnqueueNDRangeKernel(cl_.queue, k, dims, nullptr, gws, lws, 0, nullptr, want_ev ? &e : nullptr));
     if (profile) events_.push_back({prof_group_ >= 0 ? std::string(name) + "@" + std::to_string(prof_group_) : std::string(name), e});
+    else if (want_busy) busy_evs_.push_back({name, e});
   }
   void collect_profile() {
     if (!profile) return;
     clFinish(cl_.queue);
+    double p_gpu = 0, p_gemm = 0;
     for (auto& [n, e] : events_) {
-      prof_ms[n] += ClRt::event_ms(e);
+      const double ms = ClRt::event_ms(e);
+      prof_ms[n] += ms;
       prof_n[n]++;
+      p_gpu += ms;
+      if (busy_is_gemm(n)) p_gemm += ms;
       clReleaseEvent(e);
     }
+    if (busy_active_ && busy_phase_ > 0) busy_prof_gpu_ += p_gpu, busy_prof_gemm_ += p_gemm;
     events_.clear();
   }
+  static bool busy_is_gemm(const std::string& n) {
+    return n.rfind("gemm_", 0) == 0 || n.rfind("lm_head", 0) == 0 || n == "mtp_eh_proj" || n == "qsa_ix";
+  }
+  void busy_begin(int phase) {
+    if (!busy_active_) return;
+    busy_phase_ = phase;
+    busy_t0_ = std::chrono::steady_clock::now();
+    if (phase == 1 || phase == 4) {
+      busy_cur_ = BusyWin{};
+      busy_cur_.win = (int)busy_wins_.size();
+      busy_cur_.pos = pos;
+      busy_cur_.t0 = busy_t0_;
+    }
+    if (phase == 2 || phase == 4) busy_rb0_ = rd_bytes;
+    busy_prof_gpu_ = 0;
+    busy_prof_gemm_ = 0;
+    busy_ln0_ = zrt::launch_n.load();
+    busy_cp0_ = zrt::copy_n.load();
+    busy_sy0_ = zrt::sync_n.load();
+    busy_lns0_ = zrt::launch_ns.load();
+    busy_sans0_ = zrt::setarg_ns.load();
+    busy_cpns0_ = zrt::copy_ns.load();
+    busy_syns0_ = zrt::sync_ns.load();
+  }
+  void busy_finish_phase(BusyPhase& p) {
+    const auto t1 = std::chrono::steady_clock::now();
+    p.wall_ms = std::chrono::duration<double, std::milli>(t1 - busy_t0_).count();
+    p.launches = zrt::launch_n.load() - busy_ln0_;
+    p.copies = zrt::copy_n.load() - busy_cp0_;
+    p.syncs = zrt::sync_n.load() - busy_sy0_;
+    p.submit_ms = (double)((zrt::launch_ns.load() - busy_lns0_) + (zrt::setarg_ns.load() - busy_sans0_) +
+                           (zrt::copy_ns.load() - busy_cpns0_)) * 1e-6;
+    p.sync_ms = (double)(zrt::sync_ns.load() - busy_syns0_) * 1e-6;
+    p.gpu_ms = busy_prof_gpu_;
+    p.gemm_ms = busy_prof_gemm_;
+    for (auto& [n, e] : busy_evs_) {
+      const double ms = ClRt::event_ms(e);
+      p.gpu_ms += ms;
+      if (busy_is_gemm(n)) p.gemm_ms += ms;
+      clReleaseEvent(e);
+    }
+    busy_evs_.clear();
+    p.gap_ms = std::max(0.0, p.wall_ms - p.gpu_ms);
+    busy_phase_ = 0;
+  }
+  void busy_end_draft(int drafted, bool copied) {
+    if (!busy_active_ || busy_phase_ != 1) return;
+    clFinish(cl_.queue);
+    busy_cur_.drafted = drafted;
+    busy_cur_.copy_draft = copied ? 1 : 0;
+    busy_finish_phase(busy_cur_.draft);
+  }
+  void busy_end_verify() {
+    if (!busy_active_ || busy_phase_ != 2) return;
+    clFinish(cl_.queue);
+    busy_cur_.rd_bytes = rd_bytes - busy_rb0_;
+    busy_finish_phase(busy_cur_.verify);
+  }
+  void busy_end_done(int accepted) {
+    if (!busy_active_ || busy_phase_ != 3) return;
+    if (profile) collect_profile();
+    else clFinish(cl_.queue);
+    busy_cur_.accepted = accepted;
+    busy_finish_phase(busy_cur_.done);
+    busy_wins_.push_back(busy_cur_);
+  }
+  void busy_end_ar() {
+    if (!busy_active_ || busy_phase_ != 4) return;
+    clFinish(cl_.queue);
+    busy_cur_.drafted = 0;
+    busy_cur_.accepted = 0;
+    busy_cur_.rd_bytes = rd_bytes - busy_rb0_;
+    busy_finish_phase(busy_cur_.verify);
+    busy_wins_.push_back(busy_cur_);
+  }
+  public:
+  void busy_report() {
+    if (!busy_active_ || busy_wins_.empty()) return;
+    const char* csv_path = getenv("INFERZERO_GPU_BUSY_CSV");
+    FILE* cf = csv_path && *csv_path ? fopen(csv_path, "w") : nullptr;
+    if (cf) {
+      fprintf(cf, "window,pos,drafted,accepted,tokens,copy_draft,window_wall_ms,window_gpu_ms,window_gemm_ms,window_gap_ms,window_submit_ms,window_sync_ms,"
+                  "draft_wall_ms,draft_gpu_ms,draft_gemm_ms,draft_gap_ms,draft_submit_ms,draft_sync_ms,draft_launches,draft_copies,draft_syncs,"
+                  "verify_wall_ms,verify_gpu_ms,verify_gemm_ms,verify_gap_ms,verify_submit_ms,verify_sync_ms,verify_launches,verify_copies,verify_syncs,"
+                  "done_wall_ms,done_gpu_ms,done_gap_ms,done_submit_ms,done_sync_ms,done_launches,done_copies,done_syncs,rd_bytes\n");
+    }
+    double sum_wall = 0, sum_gpu = 0, sum_gemm = 0, sum_gap = 0, sum_sub = 0, sum_sync = 0;
+    double d_wall = 0, d_gpu = 0, d_gemm = 0, d_gap = 0, d_sub = 0, d_sync = 0;
+    double v_wall = 0, v_gpu = 0, v_gemm = 0, v_gap = 0, v_sub = 0, v_sync = 0;
+    double dn_wall = 0, dn_gpu = 0, dn_gap = 0, dn_sub = 0, dn_sync = 0;
+    uint64_t d_ln = 0, v_ln = 0, dn_ln = 0, sum_rb = 0;
+    int sum_drafted = 0, sum_acc = 0, sum_tok = 0;
+    for (const BusyWin& w : busy_wins_) {
+      const int tok = 1 + w.accepted;
+      const double d_gp = std::max(0.0, w.draft.wall_ms - w.draft.gpu_ms);
+      const double v_gp = std::max(0.0, w.verify.wall_ms - w.verify.gpu_ms);
+      const double dn_gp = std::max(0.0, w.done.wall_ms - w.done.gpu_ms);
+      const double w_wall = w.draft.wall_ms + w.verify.wall_ms + w.done.wall_ms;
+      const double w_gpu = w.draft.gpu_ms + w.verify.gpu_ms + w.done.gpu_ms;
+      const double w_gemm = w.draft.gemm_ms + w.verify.gemm_ms + w.done.gemm_ms;
+      const double w_gap = std::max(0.0, w_wall - w_gpu);
+      const double w_sub = w.draft.submit_ms + w.verify.submit_ms + w.done.submit_ms;
+      const double w_sync = w.draft.sync_ms + w.verify.sync_ms + w.done.sync_ms;
+      sum_wall += w_wall; sum_gpu += w_gpu; sum_gemm += w_gemm; sum_gap += w_gap; sum_sub += w_sub; sum_sync += w_sync;
+      d_wall += w.draft.wall_ms; d_gpu += w.draft.gpu_ms; d_gemm += w.draft.gemm_ms; d_gap += d_gp; d_sub += w.draft.submit_ms; d_sync += w.draft.sync_ms;
+      v_wall += w.verify.wall_ms; v_gpu += w.verify.gpu_ms; v_gemm += w.verify.gemm_ms; v_gap += v_gp; v_sub += w.verify.submit_ms; v_sync += w.verify.sync_ms;
+      dn_wall += w.done.wall_ms; dn_gpu += w.done.gpu_ms; dn_gap += dn_gp; dn_sub += w.done.submit_ms; dn_sync += w.done.sync_ms;
+      d_ln += w.draft.launches; v_ln += w.verify.launches; dn_ln += w.done.launches;
+      sum_rb += w.rd_bytes;
+      sum_drafted += w.drafted; sum_acc += w.accepted; sum_tok += tok;
+      if (cf) {
+        fprintf(cf, "%d,%d,%d,%d,%d,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,"
+                    "%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%llu,%llu,%llu,"
+                    "%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%llu,%llu,%llu,"
+                    "%.3f,%.3f,%.3f,%.3f,%.3f,%llu,%llu,%llu,%llu\n",
+                w.win, w.pos, w.drafted, w.accepted, tok, w.copy_draft, w_wall, w_gpu, w_gemm, w_gap, w_sub, w_sync,
+                w.draft.wall_ms, w.draft.gpu_ms, w.draft.gemm_ms, d_gp, w.draft.submit_ms, w.draft.sync_ms,
+                (unsigned long long)w.draft.launches, (unsigned long long)w.draft.copies, (unsigned long long)w.draft.syncs,
+                w.verify.wall_ms, w.verify.gpu_ms, w.verify.gemm_ms, v_gp, w.verify.submit_ms, w.verify.sync_ms,
+                (unsigned long long)w.verify.launches, (unsigned long long)w.verify.copies, (unsigned long long)w.verify.syncs,
+                w.done.wall_ms, w.done.gpu_ms, dn_gp, w.done.submit_ms, w.done.sync_ms,
+                (unsigned long long)w.done.launches, (unsigned long long)w.done.copies, (unsigned long long)w.done.syncs,
+                (unsigned long long)w.rd_bytes);
+      }
+    }
+    if (cf) fclose(cf);
+    const size_t nw = busy_wins_.size();
+    const auto pct = [](double a, double b) { return b > 0 ? 100.0 * a / b : 0.0; };
+    fprintf(stderr, "\n=== INFERZERO_GPU_BUSY SUMMARY (%zu windows, %d tokens, %d/%d drafts accepted) ===\n",
+            nw, sum_tok, sum_acc, sum_drafted);
+    fprintf(stderr, "  window total : wall %8.1f ms (%6.2f ms/win) | GPU %8.1f ms (%5.1f%% busy) | GEMM %8.1f ms | gap %7.1f ms (%5.1f%%) | host_submit %6.1f ms | host_wait %8.1f ms\n",
+            sum_wall, sum_wall / nw, sum_gpu, pct(sum_gpu, sum_wall), sum_gemm, std::max(0.0, sum_wall - sum_gpu), pct(std::max(0.0, sum_wall - sum_gpu), sum_wall), sum_sub, sum_sync);
+    fprintf(stderr, "  draft phase  : wall %8.1f ms (%6.2f ms/win, %4.1f%% of win) | GPU %8.1f ms (%5.1f%% busy) | GEMM %8.1f ms | gap %7.1f ms (%5.1f%%) | submit %6.1f ms | launches %.1f/win\n",
+            d_wall, d_wall / nw, pct(d_wall, sum_wall), d_gpu, pct(d_gpu, d_wall), d_gemm, std::max(0.0, d_wall - d_gpu), pct(std::max(0.0, d_wall - d_gpu), d_wall), d_sub, (double)d_ln / nw);
+    fprintf(stderr, "  verify phase : wall %8.1f ms (%6.2f ms/win, %4.1f%% of win) | GPU %8.1f ms (%5.1f%% busy) | GEMM %8.1f ms | gap %7.1f ms (%5.1f%%) | submit %6.1f ms | launches %.1f/win\n",
+            v_wall, v_wall / nw, pct(v_wall, sum_wall), v_gpu, pct(v_gpu, v_wall), v_gemm, std::max(0.0, v_wall - v_gpu), pct(std::max(0.0, v_wall - v_gpu), v_wall), v_sub, (double)v_ln / nw);
+    fprintf(stderr, "  verify_done  : wall %8.1f ms (%6.2f ms/win, %4.1f%% of win) | GPU %8.1f ms (%5.1f%% busy) | gap %7.1f ms (%5.1f%%) | submit %6.1f ms | launches %.1f/win\n",
+            dn_wall, dn_wall / nw, pct(dn_wall, sum_wall), dn_gpu, pct(dn_gpu, dn_wall), std::max(0.0, dn_wall - dn_gpu), pct(std::max(0.0, dn_wall - dn_gpu), dn_wall), dn_sub, (double)dn_ln / nw);
+    const double pass_rate = sum_wall > 0 ? 1000.0 * nw / sum_wall : 0.0;
+    const double rd_gb_per_pass = nw > 0 ? (double)sum_rb / nw / 1e9 : 0.0;
+    fprintf(stderr, "  pass rate    : %.3f passes/s | engine rd_bytes %.2f GB/pass -> %.2f GB/s effective (verify GPU-only %.2f GB/s, verify GEMM-only %.2f GB/s)\n",
+            pass_rate, rd_gb_per_pass, pass_rate * rd_gb_per_pass,
+            v_gpu > 0 ? (double)sum_rb / v_gpu / 1e6 : 0.0,
+            v_gemm > 0 ? (double)sum_rb / v_gemm / 1e6 : 0.0);
+    if (csv_path && *csv_path) fprintf(stderr, "  per-window CSV written to: %s\n", csv_path);
+    fflush(stderr);
+    busy_wins_.clear();
+  }
 
+  private:
   void decode_w8(const GpuWeight& w, cl_mem dq, cl_mem dh) { decode_w8(w.raw, w.type, w.N, w.K, dq, dh, w.iq3t); }
   // (iq3t: the rows tiled, ARC_IQ3S_TILE; the experts (engine_moe.h) never are)
   void decode_w8(cl_mem raw, uint32_t type, int N, int K, cl_mem dq, cl_mem dh, bool iq3t = false) {

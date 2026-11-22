@@ -749,5 +749,24 @@
   std::vector<cl_mem> x_views_;
   std::vector<float> logits_host_, x_host_;
   std::vector<std::pair<std::string, cl_event>> events_;
+  // INFERZERO_GPU_BUSY=1 (M2-P0): per-decode-window GPU timestamp and host-gap instrumentation
+  struct BusyPhase {
+    double wall_ms = 0, gpu_ms = 0, gemm_ms = 0, submit_ms = 0, sync_ms = 0, gap_ms = 0;
+    uint64_t launches = 0, copies = 0, syncs = 0;
+  };
+  struct BusyWin {
+    int win = 0, pos = 0, drafted = 0, accepted = 0, copy_draft = 0;
+    uint64_t rd_bytes = 0;
+    std::chrono::steady_clock::time_point t0{};
+    BusyPhase draft{}, verify{}, done{};
+  };
+  bool busy_active_ = false;
+  int busy_phase_ = 0;  // 0 none, 1 draft, 2 verify, 3 done, 4 ar
+  double busy_prof_gpu_ = 0, busy_prof_gemm_ = 0;
+  uint64_t busy_ln0_ = 0, busy_cp0_ = 0, busy_sy0_ = 0, busy_lns0_ = 0, busy_sans0_ = 0, busy_cpns0_ = 0, busy_syns0_ = 0, busy_rb0_ = 0;
+  std::chrono::steady_clock::time_point busy_t0_{};
+  std::vector<std::pair<std::string, cl_event>> busy_evs_;
+  BusyWin busy_cur_{};
+  std::vector<BusyWin> busy_wins_;
   int cur_T_ = 0;
 
