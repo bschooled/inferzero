@@ -112,6 +112,11 @@ inline void ar4_unpack(uint4 q, uint* w) {
 #endif
 // superblock size in the padded GPU raw form (multiple of 8 bytes)
 #define BBP ((BB + 7) / 8 * 8)
+#ifndef ROW_PAD
+#define ROW_PAD 0
+#endif
+#define ROW_B(nsb) ((size_t)(nsb) * BBP + (size_t)ROW_PAD)
+#define RAW_OFF(row, nsb, sb) ((size_t)(row) * ROW_B(nsb) + (size_t)(sb) * BBP)
 // (-DIQ3T: IQ3_S rows in pairs of superblocks repacked as planes; decode32's IQ3_S branch says how. Only IQ3_S, and
 //  only the kernels that were taught it: the others stop at the build, below)
 #if defined(IQ3T) && (QT != IQ3_S || BBP != 112)
@@ -567,7 +572,7 @@ __kernel void decode_w8_sb(__global const uchar* raw, int N, int K, __global con
   uint sbu[2 * BBP / 4];
   {
     const int hb = s & 1;
-    __global const uint* pr = (__global const uint*)(raw + ((size_t)n * nsb + (s & ~1)) * BBP);
+    __global const uint* pr = (__global const uint*)(raw + RAW_OFF(n, nsb, s & ~1));
 #pragma unroll
     for (int i = 0; i < 8; ++i) {
       sbu[i] = pr[8 * hb + i];             // qs, lanes' first words
@@ -586,7 +591,7 @@ __kernel void decode_w8_sb(__global const uchar* raw, int N, int K, __global con
 #ifdef XCACHE
     __global const uint* src = (__global const uint*)XROW(raw, xoff, xe0 + n / xn, 0, n % xn, s);
 #else
-    __global const uint* src = (__global const uint*)(raw + ((size_t)n * nsb + s) * BBP);
+    __global const uint* src = (__global const uint*)(raw + RAW_OFF(n, nsb, s));
 #endif
 #pragma unroll
     for (int i = 0; i < BBP / 8; ++i) {
@@ -751,7 +756,7 @@ __kernel void h8r_decode(__global const uchar* raw, int N, int K, __global const
   barrier(CLK_LOCAL_MEM_FENCE);
   uint sbu[BBP / 4];
   {
-    __global const uint* src = (__global const uint*)(raw + ((size_t)n * nsb + s) * BBP);
+    __global const uint* src = (__global const uint*)(raw + RAW_OFF(n, nsb, s));
 #pragma unroll
     for (int i = 0; i < BBP / 8; ++i) {
       const uint2 u = vload2(i, src);
@@ -768,7 +773,7 @@ __kernel void h8r_decode(__global const uchar* raw, int N, int K, __global const
     const int s0 = blk * H8SB;
     for (int i = get_local_id(0); i < 16 * H8RU; i += 256) {
       const int r = i / H8RU, o = i % H8RU;
-      sraw[i] = ((__global const uint*)(raw + ((size_t)(g * 16 + r) * nsb + s0) * BBP))[o];
+      sraw[i] = ((__global const uint*)(raw + RAW_OFF(g * 16 + r, nsb, s0)))[o];
     }
   }
   barrier(CLK_LOCAL_MEM_FENCE);
@@ -851,10 +856,17 @@ __kernel void decode_w8_sl(__global const uchar* raw, int N, int K, __global con
   {
 #ifdef XCACHE
     __global const uint* src = (__global const uint*)XROW(raw, xoff, xe0 + n0 / xn, 0, n0 % xn, 0);
+    for (int i = lid; i < 16 * SL_NSB * BBP / 4; i += 16 * SL_NSB) sl[i] = src[i];
+#elif ROW_PAD > 0
+    const int row_u = SL_NSB * BBP / 4;
+    for (int i = lid; i < 16 * row_u; i += 16 * SL_NSB) {
+      const int r = i / row_u, o = i % row_u;
+      sl[i] = ((__global const uint*)(raw + RAW_OFF(n0 + r, nsb, 0)))[o];
+    }
 #else
     __global const uint* src = (__global const uint*)(raw + (size_t)n0 * nsb * BBP);
-#endif
     for (int i = lid; i < 16 * SL_NSB * BBP / 4; i += 16 * SL_NSB) sl[i] = src[i];
+#endif
   }
   barrier(CLK_LOCAL_MEM_FENCE);
   const int lane = lid % 16, s = lid / 16, n = n0 + lane, g = n / GL;
@@ -1007,7 +1019,7 @@ __kernel void gemv(__global const uchar* raw, int N, int K, __global const uint*
     uint S4[GROWS], H1[GROWS], MB1[GROWS];
 #define IQ3T_LOAD(QA, SA, HA, MA, SP)                                                         \
   _Pragma("unroll") for (int r = 0; r < GROWS; ++r) {                                         \
-    __global const uchar* pr = raw + ((size_t)min(r0 + r, N - 1) * nsb + (SP)) * BBP;          \
+    __global const uchar* pr = raw + RAW_OFF(min(r0 + r, N - 1), nsb, (SP));                  \
     QA[r] = intel_sub_group_block_read2((__global const uint*)pr);                            \
     SA[r] = intel_sub_group_block_read((__global const uint*)(pr + 128));                     \
     HA[r] = intel_sub_group_block_read_uc(pr + 192);                                          \
@@ -1067,7 +1079,7 @@ __kernel void gemv(__global const uchar* raw, int N, int K, __global const uint*
 #ifdef GEMV_DB
   uint nxt[WIN_CALLS];  // (the next window's words: step 0, row 0 first)
   {
-    __global const uint* src = (__global const uint*)(raw + ((size_t)min(r0, N - 1) * nsb) * BBP);
+    __global const uint* src = (__global const uint*)(raw + RAW_OFF(min(r0, N - 1), nsb, 0));
 #pragma unroll
     for (int c = 0; c < WIN_CALLS; ++c) nxt[c] = intel_sub_group_block_read(src + c * 16);
   }
@@ -1079,7 +1091,7 @@ __kernel void gemv(__global const uchar* raw, int N, int K, __global const uint*
 #pragma unroll
   for (int k = 0; k < GEMV_DEEP; ++k) {
     if (dl_sp < nsb) {
-      __global const uint* src = (__global const uint*)(raw + ((size_t)min(r0 + dl_r, N - 1) * nsb + dl_sp) * BBP);
+      __global const uint* src = (__global const uint*)(raw + RAW_OFF(min(r0 + dl_r, N - 1), nsb, dl_sp));
 #pragma unroll
       for (int c = 0; c < WIN_CALLS; ++c) ring[k][c] = intel_sub_group_block_read(src + c * 16);
     }
@@ -1109,9 +1121,9 @@ __kernel void gemv(__global const uchar* raw, int N, int K, __global const uint*
 #pragma unroll
     for (int r = 0; r < GROWS; ++r) {
 #if GV_PROBE == 2
-      __global const uint* src = (__global const uint*)(raw + ((size_t)min(r0 + r, N - 1) * nsb) * BBP);
+      __global const uint* src = (__global const uint*)(raw + RAW_OFF(min(r0 + r, N - 1), nsb, 0));
 #else
-      __global const uint* src = (__global const uint*)(raw + ((size_t)min(r0 + r, N - 1) * nsb + sp) * BBP);
+      __global const uint* src = (__global const uint*)(raw + RAW_OFF(min(r0 + r, N - 1), nsb, sp));
 #endif
 #pragma unroll
       for (int c = 0; c < WIN_CALLS; ++c) pre[r][c] = intel_sub_group_block_read(src + c * 16);
@@ -1130,7 +1142,7 @@ __kernel void gemv(__global const uchar* raw, int N, int K, __global const uint*
 #pragma unroll
         for (int c = 0; c < WIN_CALLS; ++c) ring[k][c] = ring[k + 1][c];
       if (dl_sp < nsb) {
-        __global const uint* src = (__global const uint*)(raw + ((size_t)min(r0 + dl_r, N - 1) * nsb + dl_sp) * BBP);
+        __global const uint* src = (__global const uint*)(raw + RAW_OFF(min(r0 + dl_r, N - 1), nsb, dl_sp));
 #pragma unroll
         for (int c = 0; c < WIN_CALLS; ++c) ring[GEMV_DEEP - 1][c] = intel_sub_group_block_read(src + c * 16);
       }
@@ -1142,7 +1154,7 @@ __kernel void gemv(__global const uchar* raw, int N, int K, __global const uint*
         // the window after this one: row r + 1 of this step, or row 0 of the next step (none after the last)
         const int nr = r + 1 < GROWS ? r + 1 : 0, nsp = r + 1 < GROWS ? sp : sp + 2;
         if (nsp < nsb) {
-          __global const uint* src = (__global const uint*)(raw + ((size_t)min(r0 + nr, N - 1) * nsb + nsp) * BBP);
+          __global const uint* src = (__global const uint*)(raw + RAW_OFF(min(r0 + nr, N - 1), nsb, nsp));
 #pragma unroll
           for (int c = 0; c < WIN_CALLS; ++c) nxt[c] = intel_sub_group_block_read(src + c * 16);
         }
@@ -1151,9 +1163,9 @@ __kernel void gemv(__global const uchar* raw, int N, int K, __global const uint*
       const int n = min(r0 + r, N - 1);
 #if GV_PROBE == 2
       // probe 2 (decode only): always the row's first two superblocks (they stay in cache), full decode
-      __global const uint* src = (__global const uint*)(raw + ((size_t)n * nsb) * BBP);
+      __global const uint* src = (__global const uint*)(raw + RAW_OFF(n, nsb, 0));
 #else
-      __global const uint* src = (__global const uint*)(raw + ((size_t)n * nsb + sp) * BBP);
+      __global const uint* src = (__global const uint*)(raw + RAW_OFF(n, nsb, sp));
 #endif
 #pragma unroll
       for (int c = 0; c < WIN_CALLS; ++c) win[c * 16 + lane] = intel_sub_group_block_read(src + c * 16);
@@ -1515,7 +1527,7 @@ __kernel void decode_w8_vb(__global const uchar* raw, int N, int K, __global con
   const int n = get_global_id(0), s = get_global_id(1);
   const int nsb = K / 256, g = n / GL, lane = n % GL;
   if (n >= N) return;
-  __global const uchar* p = raw + ((size_t)n * nsb + s) * BBP;
+  __global const uchar* p = raw + RAW_OFF(n, nsb, s);
   __global uint* hd = wh + ((size_t)g * nsb + s) * HSTR * GL;
   uint scw[4] = {0, 0, 0, 0};
   float d0 = 0.0f;
@@ -1582,7 +1594,7 @@ __kernel void gemv_v(__global const uchar* raw, int N, int K, __global const uin
       float d, dmin;
       int sc0, sc1, mn0, mn1;
       const int row = min(r0 + r, N - 1);
-      vblock(raw + ((size_t)row * nsb + s) * BBP, ib, kt, w, &d, &dmin, &sc0, &sc1, &mn0, &mn1);
+      vblock(raw + RAW_OFF(row, nsb, s), ib, kt, w, &d, &dmin, &sc0, &sc1, &mn0, &mn1);
       int lo = dot_4x8packed_ss_int(a8.s0, w[0]);
       lo += dot_4x8packed_ss_int(a8.s1, w[1]);
       lo += dot_4x8packed_ss_int(a8.s2, w[2]);
@@ -1657,7 +1669,7 @@ __kernel void gemv_mt_v(__global const uchar* raw, int N, int K, __global const 
   const int nsb = K / 256, ib = lane % 8, hs = lane / 8, K4 = K / 4;
   __global const uchar* rp[GROWS];
 #pragma unroll
-  for (int r = 0; r < GROWS; ++r) rp[r] = raw + (size_t)min(r0 + r, N - 1) * nsb * BBP;
+  for (int r = 0; r < GROWS; ++r) rp[r] = raw + RAW_OFF(min(r0 + r, N - 1), nsb, 0);
   float acc[GROWS][TB];
 #pragma unroll
   for (int r = 0; r < GROWS; ++r)
@@ -1829,7 +1841,7 @@ __kernel void gemv_mt(__global const uchar* raw, int N, int K, __global const ui
 #pragma unroll
     for (int r = 0; r < GROWS; ++r) {
       const int n = min(r0 + r, N - 1);
-      __global const uint* src = (__global const uint*)(raw + ((size_t)n * nsb + sp) * BBP);
+      __global const uint* src = (__global const uint*)(raw + RAW_OFF(n, nsb, sp));
 #pragma unroll
       for (int c = 0; c < WIN_CALLS; ++c) win[c * 16 + lane] = intel_sub_group_block_read(src + c * 16);
       sub_group_barrier(CLK_LOCAL_MEM_FENCE);

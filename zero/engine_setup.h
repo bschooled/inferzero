@@ -474,7 +474,8 @@
       rot_src_ = read_file(opt.kernel_dir + "/rot.cl");
       if (rot_src_.empty()) throw std::runtime_error("kernel file not found: " + opt.kernel_dir + "/rot.cl");
     }
-    auto p = cl_.build(rot ? rot_src_ + "\n" + src : src,"-cl-std=CL3.0 -cl-mad-enable " + defs + (which == "ops" || which == "attnx" ? q2_defs_ : std::string()) +
+    const std::string rpad_def = (which == "decode" && row_pad_bytes() > 0) ? " -DROW_PAD=" + std::to_string(row_pad_bytes()) : std::string();
+    auto p = cl_.build(rot ? rot_src_ + "\n" + src : src,"-cl-std=CL3.0 -cl-mad-enable " + defs + rpad_def + (which == "ops" || which == "attnx" ? q2_defs_ : std::string()) +
                             (cl_.sg8 ? "" : " -DNO_SG8"));
     progs_.push_back(p);
     return kcache_[key] = cl_.kernel(p, name);

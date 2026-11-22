@@ -138,7 +138,7 @@
     w.N = (int)t.dims[1];
     if (t.type == GGML_Q8_0 || is_w8_type(t.type)) {
       w.type = t.type;
-      w.raw = upload_padded(t.type, t.data, t.nbytes);
+      w.raw = upload_padded(t.type, t.data, t.nbytes, false, nullptr, w.N);
       return w;
     }
     std::vector<uint8_t> q8;
@@ -153,7 +153,7 @@
       q8.insert(q8.end(), q.begin(), q.end());
     }
     w.type = GGML_Q8_0;
-    w.raw = upload_padded(GGML_Q8_0, q8.data(), q8.size());
+    w.raw = upload_padded(GGML_Q8_0, q8.data(), q8.size(), false, nullptr, w.N);
     return w;
   }
   cl_mem f32_from(const GgufFile& g, const std::string& name) {
@@ -242,11 +242,11 @@
       const bool q4 = getenv("ARC_HEAD_Q4") != nullptr;
       auto q8 = q4 ? quantize_rows_q4_0(v.data(), lm_head_.N, lm_head_.K) : quantize_rows_q8_0(v.data(), lm_head_.N, lm_head_.K);
       lm_head_.type = q4 ? GGML_Q4_0 : GGML_Q8_0;
-      lm_head_.raw = upload_padded(lm_head_.type, q8.data(), q8.size());
+      lm_head_.raw = upload_padded(lm_head_.type, q8.data(), q8.size(), false, nullptr, lm_head_.N);
       load_draft_head(lm_head_.type, q8.data(), q8.size());  // (ARC_MTP_VOCAB: engine_drafters.h)
     } else {
       lm_head_.type = lt.type;
-      lm_head_.raw = upload_padded(lt.type, lt.data, lt.nbytes);
+      lm_head_.raw = upload_padded(lt.type, lt.data, lt.nbytes, false, nullptr, lm_head_.N);
       load_draft_head(lt.type, lt.data, lt.nbytes);
     }
   }

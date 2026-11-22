@@ -745,7 +745,7 @@
     draft_head_.N = N;
     draft_head_.K = lm_head_.K;
     draft_head_.type = type;
-    draft_head_.raw = upload_padded(type, sub.data(), sub.size());
+    draft_head_.raw = upload_padded(type, sub.data(), sub.size(), false, nullptr, N);
     draft_ids_ = ids;
     zlog::eprintf("inferzero: drafts from %d of the %d tokens (ARC_MTP_VOCAB; %d listed, %.0f MB of the head), "
                   "verification from all\n", N, V, (int)ranked.size(), sub.size() / 1e6);
