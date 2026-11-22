@@ -1027,7 +1027,7 @@ int main(int argc, char** argv) {
       {"--mtp", ""}, {"--mtp-model", "an MTP head .gguf"}, {"--dflash", "a DFlash2 drafter folder (with model.safetensors)"}, {"--no-dflash", ""},
       {"--draft", "auto, mtp or dflash"}, {"--mmproj", "an mmproj .gguf file"}, {"--no-mmproj", ""},
       {"--image-min-tokens", "a number of tokens"}, {"--image-max-tokens", "a number of tokens"},
-      {"--mtp-drafts", "a number, e.g. 3"}, {"--mtp-adaptive", ""}, {"--copy-draft", ""}, {"--mtp-copy-union", ""}, {"--think-budget", "a number of tokens"}, {"--preserve-thinking", ""},
+      {"--mtp-drafts", "a number, e.g. 3"}, {"--mtp-adaptive", ""}, {"--mtp-draft-vocab", "a number of head rows, e.g. 16384"}, {"--copy-draft", ""}, {"--mtp-copy-union", ""}, {"--think-budget", "a number of tokens"}, {"--preserve-thinking", ""},
       {"--kernels", "a folder"}, {"--session-cache-gb", "GiB, 0 = off"}, {"--session-dir", "a folder"},
       {"--slots", "1..8"}, {"--gpus", "1..64"}, {"--split", "tensor or layer"}, {"--tensor-split", "shares a GPU, e.g. 3,1"},
       {"--no-swap", ""}, {"--no-web-tools", ""},
@@ -1146,6 +1146,7 @@ int main(int argc, char** argv) {
     else if (a == "--image-max-tokens") so.img_max = atoi(next().c_str());
     else if (a == "--mtp-drafts") so.eo.mtp_drafts = to_int(a, next()), so.eo.mtp_drafts_given = true;
     else if (a == "--mtp-adaptive") so.eo.mtp_adaptive = true, so.eo.mtp = true;  // (P2: priced adaptive draft depth)
+    else if (a == "--mtp-draft-vocab") so.eo.mtp_draft_vocab = to_int(a, next());  // (M6-P4: drafts from N head rows)
     else if (a == "--think-budget") so.think_budget = to_int(a, next());
     else if (a == "--preserve-thinking") so.preserve_thinking = true;
     else if (a == "--kernels") so.eo.kernel_dir = next();
@@ -1226,6 +1227,7 @@ int main(int argc, char** argv) {
     if (!so.ctx_auto && so.eo.ctx < 1) throw std::runtime_error("--ctx: expected 1 or more tokens (or auto)");
     if (so.eo.chunk < 0) throw std::runtime_error("--chunk: expected 0 (auto) or more tokens");
     if (so.eo.mtp_drafts < 0) throw std::runtime_error("--mtp-drafts: expected 0 or more");
+    if (so.eo.mtp_draft_vocab < 0) throw std::runtime_error("--mtp-draft-vocab: expected 0 (off) or more head rows");
     // the files and folders given, checked now: what each must be, said here instead of a later, vaguer error
     namespace fs = std::filesystem;
     auto check = [](const std::string& opt, const std::string& p, bool folder, const std::string& holds) {
@@ -1329,6 +1331,10 @@ int main(int argc, char** argv) {
             "                        always drafts 3\n"
             "  --mtp-adaptive        pick the MTP draft depth per window from measured acceptance and cost (1..7, or up to\n"
             "                        --mtp-drafts when given), instead of the static depth (P2; ARC_MTP_ADAPTIVE=1 too)\n"
+            "  --mtp-draft-vocab N   with --mtp: the drafts read only the N most frequent rows of the output head (and\n"
+            "                        every control token), gathered at load; verification keeps the whole vocabulary, so\n"
+            "                        the text is the full head's (M6-P4; 32768 measured: code and structured +5-6 %%,\n"
+            "                        prose at 300 tokens flat; ARC_MTP_VOCAB=N too)\n"
             "  --copy-draft          with --mtp: where the last tokens appeared earlier in the conversation, draft what\n"
             "                        followed them there (copy drafting; the same text, verified as any drafts)\n"
             "  --npu on|off|force    the NPU (Intel AI Boost) computes part of each prompt chunk next to the GPU\n"

@@ -683,8 +683,9 @@
 
  public:
   // ---------------------------------------------------------------- D1: drafting over a reduced vocabulary
-  // ARC_MTP_VOCAB=N (2026-11-21, opt-in; QUEUE D1, the idea from FR-Spec, Zhao et al., ACL 2025; no code taken): the
-  // MTP block's drafts read only N rows of the output head, the most frequent tokens of the model's vocabulary
+  // --mtp-draft-vocab N / ARC_MTP_VOCAB=N (2026-11-21, opt-in; QUEUE D1, the idea from FR-Spec, Zhao et al., ACL 2025;
+  // no code taken; M6-P4 measured it on the IQ2_M MTP champion): the MTP block's drafts read only N rows of the
+  // output head, the most frequent tokens of the model's vocabulary
   // (scripts/draft-vocab/vocab-<vocabulary size>.txt, tools/make_draft_vocab.ps1) and every control token, gathered
   // at load into a head of their own (draft_head_, N / V of lm_head's bytes). Every draft of the full head ran all
   // 248,320 rows: half of a Windows A770's drafting time (hansong80, #45), 23.7 % of the laptop's MTP GPU time.
@@ -694,10 +695,6 @@
   // and Flash Next's; not Gemma's drafter or DFlash2, not a split model's shards
   GpuWeight draft_head_;        // (empty when off)
   std::vector<int> draft_ids_;  // (row i of draft_head_ is token draft_ids_[i])
-  static int mtp_vocab_env() {
-    static const int n = getenv("ARC_MTP_VOCAB") ? std::max(0, atoi(getenv("ARC_MTP_VOCAB"))) : 0;
-    return n;
-  }
   // the ranked list next to the package (zero/kernels/../../scripts, kernels/../scripts) or in the folder run from
   std::vector<int> draft_vocab_file(int V) const {
     namespace fs = std::filesystem;
@@ -719,8 +716,13 @@
   }
   // (from load_head: the head's raw rows on the host, the type they were uploaded in)
   void load_draft_head(uint32_t type, const uint8_t* data, size_t nbytes) {
-    const int want = mtp_vocab_env(), V = lm_head_.N;
-    if (!want || !opt.mtp || opt.tp_size > 1 || hp.gemma || V <= 0) return;
+    const int want = std::max(0, opt.mtp_draft_vocab), V = lm_head_.N;
+    if (!want || V <= 0) return;
+    if (!opt.mtp || opt.tp_size > 1 || hp.gemma) {
+      LOG_WRN("--mtp-draft-vocab %d (ARC_MTP_VOCAB): needs --mtp with a dense Qwen3.5 / 3.8 model on one GPU; "
+              "the full head drafts\n", want);
+      return;
+    }
     const int N = std::min(V, (want + 63) / 64 * 64);  // (whole groups of 64 rows: the GEMV's row groups)
     if (N >= V) return;
     std::vector<char> in(V, 0);
@@ -734,7 +736,8 @@
         if ((*ty)[i] == 3 || (*ty)[i] == 4) take(i);
     const std::vector<int> ranked = draft_vocab_file(V);
     if (ranked.empty()) {
-      LOG_WRN("ARC_MTP_VOCAB=%d: no scripts/draft-vocab/vocab-%d.txt for this vocabulary: the full head drafts\n", want, V);
+      LOG_WRN("--mtp-draft-vocab %d: no scripts/draft-vocab/vocab-%d.txt for this vocabulary: the full head drafts\n",
+              want, V);
       return;
     }
     for (int id : ranked) take(id);
