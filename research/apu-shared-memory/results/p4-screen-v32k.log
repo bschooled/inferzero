@@ -1,0 +1,30 @@
+# speedbench config=IQ2_M-mtp-d3 date=2026-11-21T19:12:14-08:00
+# model=/home/bschooley/models/Qwen3.8-40B-Ultimate-Heretic-Uncn-Turbo-Brilli-50x-AGI-NEO-MTP-IQ2_M.gguf
+# command=/home/bschooley/inferzero-p4/bin/serverz -m /home/bschooley/models/Qwen3.8-40B-Ultimate-Heretic-Uncn-Turbo-Brilli-50x-AGI-NEO-MTP-IQ2_M.gguf --slots 1 --ctx 8192 --host 127.0.0.1 --port 8090 --no-prefix-cache --session-cache-gb 0 --mtp --mtp-drafts 3 --mtp-draft-vocab 32768
+# mode=full repeats=1 cooldown=30s max_tokens=150
+2026-11-21 19:12:14.446 I inferzero built from source (Nov 21 2026)
+2026-11-21 19:12:14.446 I system: CachyOS, kernel 7.3.5-2-cachyos, Intel(R) Core(TM) Ultra 7 155H, 22 logical processors, RAM 30.7 GiB (27.1 free)
+2026-11-21 19:12:14.592 I GPU: Intel(R) Arc(TM) Graphics, driver 26.40.40196, 128 EUs, 2250 MHz, 28.4 GiB (shared with the CPU), XMX no, 8- and 16-lane sub-groups
+2026-11-21 19:12:22.950 I loaded in 8.2 s | 96 layers | ctx 8192 | chunk 4096 | GPU 16.97 GiB | weights W8 just-in-time
+2026-11-21 19:12:22.950 I model: qwen35, 96 layers, embedding 5120, heads 24 / kv 4, head 256, ffn 17408, vocab 248320, trained ctx 262144, file 13.53 GiB, IQ2_M
+2026-11-21 19:12:32.478 I serving /home/bschooley/models/Qwen3.8-40B-Ultimate-Heretic-Uncn-Turbo-Brilli-50x-AGI-NEO-MTP-IQ2_M.gguf as "Qwen3.8-40B-Ultimate-Heretic-Uncn-Turbo-Brilli-50x-AGI-NEO-MTP-IQ2_M"
+2026-11-21 19:12:32.479 I listening on http://127.0.0.1:8090  (OpenAI API at /v1, web UI at /)
+
+[IQ2_M-mtp-d3] phase=full prompt=code rep=1/1 | pp=155 tok (24.3 t/s) | gen=150 tok in 16.70s | srv_tps=8.98 | client_tps=9.06 | MTP=96/136
+  server_log: 2026-11-21 19:12:55.672 I [chatcmpl-arc1] prompt 155 tok (cached 0) 6.4 s (24.3 t/s) | gen 150 tok 16.7 s (8.98 t/s) | length | MTP 96/136 drafts accepted | first token 6.38 s | context 305 of 8192 | slot 0
+[IQ2_M-mtp-d3] phase=full prompt=fiction rep=1/1 | pp=131 tok (25.0 t/s) | gen=150 tok in 20.10s | srv_tps=7.46 | client_tps=7.41 | MTP=84/153
+  server_log: 2026-11-21 19:13:51.062 I [chatcmpl-arc2] prompt 131 tok (cached 0) 5.2 s (25.0 t/s) | gen 150 tok 20.1 s (7.46 t/s) | length | MTP 84/153 drafts accepted | first token 5.25 s | context 281 of 8192 | slot 0
+[IQ2_M-mtp-d3] phase=full prompt=prose rep=1/1 | pp=126 tok (22.8 t/s) | gen=150 tok in 16.90s | srv_tps=8.88 | client_tps=8.82 | MTP=95/140
+  server_log: 2026-11-21 19:14:43.512 I [chatcmpl-arc3] prompt 126 tok (cached 0) 5.5 s (22.8 t/s) | gen 150 tok 16.9 s (8.88 t/s) | length | MTP 95/140 drafts accepted | first token 5.53 s | context 276 of 8192 | slot 0
+[IQ2_M-mtp-d3] phase=full prompt=structured rep=1/1 | pp=340 tok (41.3 t/s) | gen=150 tok in 15.70s | srv_tps=9.56 | client_tps=9.50 | MTP=100/143
+  server_log: 2026-11-21 19:15:37.471 I [chatcmpl-arc4] prompt 340 tok (cached 0) 8.2 s (41.3 t/s) | gen 150 tok 15.7 s (9.56 t/s) | length | MTP 100/143 drafts accepted | first token 8.24 s | context 490 of 8192 | slot 0
+
+=== SPEEDBENCH MEDIAN SUMMARY (IQ2_M-mtp-d3) ===
+| Config | Phase | Prompt | Runs (srv tok/s) | median srv tok/s | median client tok/s | median pp tok/s | median MTP accepted (total x/y) |
+|---|---|---|---|---:|---:|---:|---|
+| IQ2_M-mtp-d3 | full (1x) | code | 8.98 | 8.98 | 9.06 | 24.3 | 96/136 (sum 96/136, 70.6%) |
+| IQ2_M-mtp-d3 | full (1x) | fiction | 7.46 | 7.46 | 7.41 | 25.0 | 84/153 (sum 84/153, 54.9%) |
+| IQ2_M-mtp-d3 | full (1x) | prose | 8.88 | 8.88 | 8.82 | 22.8 | 95/140 (sum 95/140, 67.9%) |
+| IQ2_M-mtp-d3 | full (1x) | structured | 9.56 | 9.56 | 9.50 | 41.3 | 100/143 (sum 100/143, 69.9%) |
+| **IQ2_M-mtp-d3** | **FULL-PASS MEDIAN** | **4 full prompts (4 runs)** | — | **8.93** | **8.94** | **24.6** | **sum 375/572 (65.6%)** |
+| **IQ2_M-mtp-d3** | **ALL-RUNS MEDIAN** | **4 prompts (4 runs)** | — | **8.93** | **8.94** | — | **sum 375/572 (65.6%)** |

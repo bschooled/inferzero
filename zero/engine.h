@@ -104,6 +104,11 @@ struct EngineOptions {
   // from the measured acceptance per depth and the measured draft / verify cost (mtp_adaptive_pick,
   // zero/engine_drafters.h; ARC_MTP_ADAPTIVE=1 sets it too). Default off: the static --mtp-drafts path, bit-identical.
   bool mtp_adaptive = false;
+  // M6-P4 reduced-vocabulary draft head (2026-11-21, opt-in; QUEUE D1's head, now a flag): the MTP block's drafts
+  // read only the N most frequent rows of lm_head, plus every control token, gathered at load (load_draft_head,
+  // engine_drafters.h); VERIFICATION keeps the whole vocabulary, so the text stays the full head's. 0 = off, the
+  // unchanged full head. --mtp-draft-vocab N, or ARC_MTP_VOCAB=N.
+  int mtp_draft_vocab = 0;
   float mtp_min_p = 0.5f;     // draft a second token only if the MTP block gives the first this probability
   // copy drafting (QUEUE R1, 2026-11-21, opt-in): with mtp, a step whose last tokens appeared earlier in the context
   // drafts the tokens that followed them there instead of asking the drafter (mtp_draft's hist); verified as any drafts,
@@ -375,6 +380,9 @@ __kernel void rd_strip(__global const uint* p, __global uint* out, int per_item)
     // (P2 adaptive draft depth: the controller picks 1..7 per window, so the static setting only caps it; an
     //  explicit --mtp-drafts N stays the cap, else the ceiling is Qwen's trained kMaxDrafts. ARC_MTP_ADAPTIVE=1 too)
     if (!opt.mtp_adaptive && getenv("ARC_MTP_ADAPTIVE") && atoi(getenv("ARC_MTP_ADAPTIVE")) != 0) opt.mtp_adaptive = true;
+    // (M6-P4: --mtp-draft-vocab N, ARC_MTP_VOCAB=N when the flag was not given; load_draft_head reads the field)
+    if (opt.mtp_draft_vocab <= 0 && getenv("ARC_MTP_VOCAB"))
+      opt.mtp_draft_vocab = std::max(0, atoi(getenv("ARC_MTP_VOCAB")));
     if (opt.mtp_adaptive && opt.mtp) opt.mtp_drafts = opt.mtp_drafts_given ? std::clamp(opt.mtp_drafts, 1, 7) : 7;
     else if (opt.mtp_drafts <= 0) opt.mtp_drafts = !opt.dflash.empty() ? 7 : xe2_mtp_drafts(mtp_block_drafts());
     auto t0 = std::chrono::steady_clock::now();

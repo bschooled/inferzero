@@ -1,0 +1,17 @@
+=== Rusticl warning: Patched Mesa libclc not detected. Upstream libclc may contain known bugs or breaking changes and isn't guaranteed to work reliably. Please visit https://gitlab.freedesktop.org/karolherbst/mesa-libclc for more information. ===
+loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 16.86 GiB | W8 just-in-time | chunk 4096 | ctx 8192 | load 7647 ms
+
+=== INFERZERO_GPU_BUSY SUMMARY (49 windows, 119 tokens, 70/119 drafts accepted) ===
+  window total : wall  16770.6 ms (342.26 ms/win) | GPU  14464.7 ms ( 86.3% busy) | GEMM  12085.7 ms | gap  2306.0 ms ( 13.7%) | host_submit 6069.6 ms | host_wait  10361.5 ms
+  draft phase  : wall   2036.6 ms ( 41.56 ms/win, 12.1% of win) | GPU   1734.7 ms ( 85.2% busy) | GEMM   1682.4 ms | gap   301.9 ms ( 14.8%) | submit   69.3 ms | launches 49.0/win
+  verify phase : wall  14172.8 ms (289.24 ms/win, 84.5% of win) | GPU  12321.9 ms ( 86.9% busy) | GEMM  10403.3 ms | gap  1850.9 ms ( 13.1%) | submit 5941.5 ms | launches 1534.6/win
+  verify_done  : wall    561.2 ms ( 11.45 ms/win,  3.3% of win) | GPU    408.1 ms ( 72.7% busy) | gap   153.2 ms ( 27.3%) | submit   58.8 ms | launches 88.2/win
+  pass rate    : 2.922 passes/s | engine rd_bytes 13.74 GB/pass -> 40.16 GB/s effective (verify GPU-only 54.66 GB/s, verify GEMM-only 64.74 GB/s)
+  per-window CSV written to: /home/bschooley/inferzero-p4/research/apu-shared-memory/results/p4-gpu-busy-static.csv
+prompt: 88 tokens | time to first token 2744.6 ms (32.1 t/s)
+top-10 next token: 760(0.3425) 1919(0.3401) 248069(0.1029) 40(0.0252) 24342(0.0177) 1206(0.0102) 16(0.0097) 2(0.0082) 9764(0.0075) 90700(0.0060)
+greedy: 760 1156 369 9859 364 264 11346 10597 8627 883 4475 17120 14931 13 1061 369 264 22038 10597 8282 883 6165 7785 321 14246 13 6558 728 1683 1472 279 1328 5493 310 3311 25 271 16 13 3028 63164 5638 20459 471 8343 4475 74593 198 17 13 3957 346 89838 74593 471 6278 9158 15141 19222 198 18 13 16706 61782 6157 25 198 256 471 7884 37972 5972 13 2136 23683 7575 45850 198 256 471 9357 95085 1433 318 54 939 8 37285 36515 198 256 471 50164 26079 364 2086 51797 12261 198 19 13 35326 41052 9989 198 20 13 10646 8343 14018 1990 599 21459 271 9764 728 5759 411 430 264
+generation: 120 tokens in 16847.5 ms (7.12 t/s)
+weights read: 16447 MB per pass, 47.8 GB/s (55 % of this GPU's measured 87 GB/s) (drafter weights not counted)
+MTP: 119 drafts, 70 accepted (58.8 %), 2.45 tokens per main-model pass (49 passes)
+MTP time: drafting 2037.1 ms, verification 14186.0 ms (289.5 ms a pass), verify_done 562.1 ms

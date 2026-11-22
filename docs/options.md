@@ -98,14 +98,14 @@ On Windows: `zero-server start -Opt <id>` turns one on (kept for later starts), 
 - **Note:** needs --mtp.
 - **More:** [CHANGELOG.md](../CHANGELOG.md), experimental.
 
-## Drafts from the common tokens (English and code) (`ARC_MTP_VOCAB=32768`)
+## Drafts from the common tokens (English and code) (`--mtp-draft-vocab 32768`)
 
 - **What it does:** With --mtp: each draft reads only the 32,768 most common tokens' rows of the output head, not all 248,320; the model still checks every draft against the full vocabulary, so the text stays the same.
-- **Default:** off.
+- **Default:** off. (`ARC_MTP_VOCAB=32768` sets it too.)
 - **Best for:** dense, moe.
-- **Cost:** 69 MB of GPU memory (the 4B; more with a wider model); Chinese text drafts less well (the laptop's 4B 31.6 -> 26.7 tok/s), Indonesian about even.
+- **Cost:** 69 MB of GPU memory (the 4B), 115 MB on the 40B (Q6_K); Chinese text drafts less well (the laptop's 4B 31.6 -> 26.7 tok/s), Indonesian about even.
 - **Output:** the same, bit for bit.
-- **Measured:** the laptop's 4B on a coding prompt 35.9-37.3 -> 44.3-45.8 tok/s, the 27B 10.9 -> 12.6; Indonesian 27.4 -> 28.9; Chinese 31.6 -> 26.7.
+- **Measured:** the laptop's 4B on a coding prompt 35.9-37.3 -> 44.3-45.8 tok/s, the 27B 10.9 -> 12.6; Indonesian 27.4 -> 28.9; Chinese 31.6 -> 26.7. The 40B IQ2_M MTP d3, 3 x tg300: code 8.14 -> 8.54, structured 9.11 -> 9.63, fiction 6.85 -> 6.94, prose 7.67 -> 7.65 tok/s (draft GPU 35.4 -> 12.6 ms a window; 16,384 rows is a loss there, -6.3 %).
 - **Note:** needs --mtp.
 - **More:** [CHANGELOG.md](../CHANGELOG.md), experimental.
 

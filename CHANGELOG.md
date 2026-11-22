@@ -140,6 +140,25 @@
   options are attention, more precise prompt reading, precise mode, and faster drafting's text check. It needs a
   few GB of RAM and CPU time (about 30 minutes for 480 tokens of the 27B on a laptop).
 
+## 2026-11-21: the reduced-vocabulary draft head as a flag, measured on the champion (`--mtp-draft-vocab N`)
+
+- **What it does:** with `--mtp`, the drafts read only the N most frequent rows of the output head (plus every control
+  token), gathered at load from `scripts/draft-vocab/vocab-<vocab>.txt`; verification keeps the whole vocabulary, so
+  a draft outside the N is simply never proposed and the text is the full head's. `ARC_MTP_VOCAB=N` already did the
+  drafting; it is now an `EngineOptions` field (`mtp_draft_vocab`) with `--mtp-draft-vocab N` in runz and serverz, and
+  the engine says why it cannot apply (no `--mtp`, a split model, a Gemma drafter) or when a vocabulary has no list.
+- **Measured on the 40B IQ2_M MTP d3 champion** (the laptop, `INFERZERO_GPU_BUSY=1`, prose, tg120): draft GPU
+  **35.4 -> 12.6 ms a window (-64 %)**, window GPU **295.2 -> 271.5 ms (-8.0 %)**; the draft `lm_head` was 11.5 ms of
+  a ~14.6 ms draft step and is 1.5-2.2 ms at 32,768 rows.
+- **3 x tg300, four prompts:** code 8.14 -> **8.54**, structured 9.11 -> **9.63**, fiction 6.85 -> 6.94, prose
+  7.67 -> 7.65 tok/s (median 7.83 -> **8.04, +2.7 %**), acceptance 63.2 -> 59.6 %. A code and structured-text win;
+  creative prose is flat at 300 tokens.
+- **32,768 rows is the floor on that model:** 16,384 is **-6.3 %** (acceptance 67.4 -> 53.8 %) because the ranking's
+  tail carries 20 pp of the acceptance. 115 MB of the head at 32,768 rows (Q6_K, 3,570 B a row).
+- **Off by default**, and the output is the plain run's: default-off `--dump-logits` sha256 the same as `ea5de85`
+  (`0d848bc5...`), the same generated text with the head on (`167cbeb5...`).
+- More: `research/apu-shared-memory/P4-draft-lmhead.md`.
+
 ## 2026-11-21: the QSA 27B reads with full attention by default; sparse attention opt-in (`ARC_QSA=1`)
 
 - **The QSA-trained 27B now uses full attention unless asked** (the user: "Actually I like full attention"). The start

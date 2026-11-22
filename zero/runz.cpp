@@ -467,6 +467,10 @@ static int run_main(int argc, char** argv) {
             "  --draft auto|mtp|dflash  with --dflash: both drafters picked per step (auto), the MTP block only, or\n"
             "                        DFlash2 only (the MTP block is not loaded)\n"
             "  --mtp-min-p P         draft a second token only above this MTP probability (default 0.5)\n"
+            "  --mtp-draft-vocab N   with --mtp: the drafts read only the N most frequent rows of the output head\n"
+            "                        (scripts/draft-vocab/vocab-<vocab>.txt, every control token too), gathered at load;\n"
+            "                        verification keeps the whole vocabulary, so the text is the full head's (M6-P4;\n"
+            "                        smaller N = less draft lm_head traffic; ARC_MTP_VOCAB=N too; 0 = off)\n"
             "  --copy-draft          with --mtp: where the last tokens appeared earlier in the context, draft what followed\n"
             "                        them there (copy drafting; the same output, verified as any drafts)\n"
             "  --mtp-copy-union      with --copy-draft: one verify window of the copy proposals first (up to\n"
@@ -607,6 +611,7 @@ static int run_main(int argc, char** argv) {
     else if (a == "--mtp-drafts") eo.mtp_drafts = atoi(next()), eo.mtp_drafts_given = true;
     else if (a == "--mtp-model") { eo.mtp_model = next(); eo.mtp = true; }  // (an MTP head / drafter file of its own)
     else if (a == "--mtp-min-p") eo.mtp_min_p = (float)atof(next());
+    else if (a == "--mtp-draft-vocab") eo.mtp_draft_vocab = atoi(next());  // (M6-P4: drafts from N head rows)
     else if (a == "--mtp-adaptive") eo.mtp_adaptive = true, eo.mtp = true;  // (P2: priced adaptive draft depth)
     else if (a == "--copy-draft") eo.copy_draft = true;  // (R1: drafts copied from the context where it repeats)
     else if (a == "--mtp-copy-union") eo.mtp_copy_union = true;  // (M5-P3: copy proposals + MTP drafts in one window)

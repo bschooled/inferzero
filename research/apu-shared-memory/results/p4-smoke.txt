@@ -1,0 +1,12 @@
+=== help: the flag is listed ===
+  --mtp-draft-vocab N   with --mtp: the drafts read only the N most frequent rows of the output head
+                        (scripts/draft-vocab/vocab-<vocab>.txt, every control token too), gathered at load;
+                        verification keeps the whole vocabulary, so the text is the full head's (M6-P4;
+                        smaller N = less draft lm_head traffic; ARC_MTP_VOCAB=N too; 0 = off)
+=== unknown-option message shows the new option (serverz) ===
+2026-11-21 20:05:49.913 E inferzero-server: --mtp-draft-vocab needs a value (a number of head rows, e.g. 16384)
+inferzero: drafts from 32768 of the 248320 tokens (ARC_MTP_VOCAB; 23906 listed, 115 MB of the head), verification from all
+MTP: 3 drafts, 3 accepted (100.0 %), 4.00 tokens per main-model pass (1 passes)
+=== Rusticl warning: Patched Mesa libclc not detected. Upstream libclc may contain known bugs or breaking changes and isn't guaranteed to work reliably. Please visit https://gitlab.freedesktop.org/karolherbst/mesa-libclc for more information. ===
+--mtp-draft-vocab 32768 (ARC_MTP_VOCAB): needs --mtp with a dense Qwen3.5 / 3.8 model on one GPU; the full head drafts
+2026-11-21 20:07:01.613 E inferzero-server: --mtp-draft-vocab: expected 0 (off) or more head rows
