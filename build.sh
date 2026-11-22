@@ -13,11 +13,12 @@ set -euo pipefail
 cd "$(dirname "$0")"
 CXX="${CXX:-g++}"
 declare -A SRC=([runz]=zero/runz.cpp [serverz]=zero/serverz.cpp [mgpu_probe]=zero/mgpu_probe.cpp
-                [ref_forward]=tools/ref_forward.cpp [gpu_bench]=bench/gpu_bench.cpp [xw_peak]=bench/xw_peak.cpp)
+                [ref_forward]=tools/ref_forward.cpp [gpu_bench]=bench/gpu_bench.cpp [xw_peak]=bench/xw_peak.cpp
+                [gpu_busy_sampler]=tools/gpu_busy_sampler.cpp)
 targets=("$@")
 [ ${#targets[@]} -eq 0 ] && targets=(runz serverz mgpu_probe ref_forward gpu_bench)
 for t in "${targets[@]}"; do
-  [ -n "${SRC[$t]:-}" ] || { echo "build.sh: unknown program '$t' (runz, serverz, mgpu_probe, ref_forward, gpu_bench, xw_peak)" >&2; exit 2; }
+  [ -n "${SRC[$t]:-}" ] || { echo "build.sh: unknown program '$t' (runz, serverz, mgpu_probe, ref_forward, gpu_bench, xw_peak, gpu_busy_sampler)" >&2; exit 2; }
 done
 command -v "$CXX" >/dev/null || { echo "build.sh: $CXX not found (sudo apt install g++)" >&2; exit 1; }
 mkdir -p bin
