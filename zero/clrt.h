@@ -321,11 +321,22 @@ inline ze_command_list_handle_t rec_list(Dev& d) {
 
 // (the driver's UINT64_MAX wait does not spin a core: measured 2026-11-04, QUEUE 31.11 (1); polling with sleeps
 //  instead gained nothing)
-inline std::atomic<uint64_t> sync_n{0};  // (host waits, counted with ARC_LAUNCH_STATS)
+inline std::atomic<uint64_t> sync_n{0}, sync_ns{0};  // (host waits, counted with ARC_LAUNCH_STATS / INFERZERO_GPU_BUSY)
 inline bool launch_stats_on();
 inline void sync() {
   Dev& d = D();
-  if (launch_stats_on()) ++sync_n;
+  const bool st = launch_stats_on();
+  const auto ts0 = st ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+  struct SyncTimer {
+    bool on;
+    std::chrono::steady_clock::time_point t0;
+    ~SyncTimer() {
+      if (on) {
+        ++sync_n;
+        sync_ns += (uint64_t)std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0).count();
+      }
+    }
+  } st_guard{st, ts0};
   if (d.rec) {
     flush(d);
     d.rec_cap = 0;  // (the GPU will be idle: the next lists start small again)
@@ -803,6 +814,29 @@ inline bool device_for(const char* want_name, uint32_t want_id, void*& d, void*&
   return true;
 }
 }  // namespace rcl
+// ARC_LAUNCH_STATS=1 (diagnostics, runz prints them per generated token): kernel launches, and the host time spent
+// setting their arguments and appending them (the CPU's share of a step, against the GPU's)
+inline const bool gpu_busy_env = (getenv("INFERZERO_GPU_BUSY") && atoi(getenv("INFERZERO_GPU_BUSY")) != 0);
+inline const bool launch_stats = (getenv("ARC_LAUNCH_STATS") && atoi(getenv("ARC_LAUNCH_STATS")) != 0) || gpu_busy_env;
+inline bool launch_stats_on() { return launch_stats; }
+inline bool gpu_busy_on() { return gpu_busy_env; }
+inline std::atomic<uint64_t> launch_n{0}, launch_ns{0}, setarg_ns{0}, copy_n{0}, copy_ns{0};
+struct LaunchTimer {
+  std::atomic<uint64_t>& acc;
+  std::chrono::steady_clock::time_point t0 = launch_stats ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+  ~LaunchTimer() {
+    if (launch_stats) acc += (uint64_t)std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0).count();
+  }
+};
+inline void append_copy(ze_command_list_handle_t cl, void* dst, const void* src, size_t n) {
+  if (launch_stats) {
+    ++copy_n;
+    LaunchTimer lt{copy_ns};
+    ZE_CHECK(zeCommandListAppendMemoryCopy(cl, dst, src, n, nullptr, 0, nullptr));
+    return;
+  }
+  ZE_CHECK(zeCommandListAppendMemoryCopy(cl, dst, src, n, nullptr, 0, nullptr));
+}
 }  // namespace zrt
 
 // ---- the OpenCL calls of the engine
@@ -817,7 +851,7 @@ inline cl_int clEnqueueCopyBuffer(cl_command_queue, cl_mem src, cl_mem dst, size
             n, so, n, src->size, doff, n, dst->size);
     return -30;
   }
-  ZE_CHECK(zeCommandListAppendMemoryCopy(zrt::imm(), dst->ptr + doff, src->ptr + so, n, nullptr, 0, nullptr));
+  zrt::append_copy(zrt::imm(), dst->ptr + doff, src->ptr + so, n);
   return CL_SUCCESS;
 }
 inline bool out_of_bounds(const char* what, cl_mem b, size_t off, size_t n) {
@@ -831,7 +865,7 @@ inline cl_int clEnqueueReadBuffer(cl_command_queue, cl_mem b, cl_bool, size_t of
   if (ev) *ev = nullptr;
   if (out_of_bounds("read", b, off, n)) return -30;
   char* s = zrt::staging(n);
-  ZE_CHECK(zeCommandListAppendMemoryCopy(zrt::imm(), s, b->ptr + off, n, nullptr, 0, nullptr));
+  zrt::append_copy(zrt::imm(), s, b->ptr + off, n);
   zrt::sync();
   memcpy(host, s, n);
   return CL_SUCCESS;
@@ -843,7 +877,7 @@ inline cl_int clEnqueueWriteBuffer(cl_command_queue, cl_mem b, cl_bool, size_t o
   char* s = zrt::staging(n);
   zrt::sync();  // (the bounce buffer may still be read by an earlier copy)
   memcpy(s, host, n);
-  ZE_CHECK(zeCommandListAppendMemoryCopy(zrt::imm(), b->ptr + off, s, n, nullptr, 0, nullptr));
+  zrt::append_copy(zrt::imm(), b->ptr + off, s, n);
   zrt::sync();
   return CL_SUCCESS;
 }
@@ -914,19 +948,7 @@ inline cl_int clReleaseMemObject(cl_mem m) {
   delete m;
   return CL_SUCCESS;
 }
-// ARC_LAUNCH_STATS=1 (diagnostics, runz prints them per generated token): kernel launches, and the host time spent
-// setting their arguments and appending them (the CPU's share of a step, against the GPU's)
 namespace zrt {
-inline const bool launch_stats = (getenv("ARC_LAUNCH_STATS") && atoi(getenv("ARC_LAUNCH_STATS")) != 0);
-inline bool launch_stats_on() { return launch_stats; }
-inline std::atomic<uint64_t> launch_n{0}, launch_ns{0}, setarg_ns{0};
-struct LaunchTimer {
-  std::atomic<uint64_t>& acc;
-  std::chrono::steady_clock::time_point t0 = launch_stats ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
-  ~LaunchTimer() {
-    if (launch_stats) acc += (uint64_t)std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0).count();
-  }
-};
 
 // ARC_ZE_WATCH=ms (diagnostics: which kernel runs long or loses the device; slow, every launch waited for alone).
 // Each launch signals an event of its own and is waited for on that event, not on the shared command list, so the
