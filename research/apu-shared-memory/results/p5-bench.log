@@ -1,0 +1,169 @@
+# M7b-P5 — DPAS prefill at T >= 256: raw bench log
+# node bschooley@192.168.50.48, tree ~/inferzero-p5, branch p5-dpas-prefill @ 9551dbb
+# runz --bench-pp N --n 0 (the tool times 3 runs itself), 60 s cool between invocations
+# A default = flag off; B = ARC_PROMPT_DPAS=1; C = + ARC_XMX_TRY=2 (the DP4a stand-in for DPAS)
+
+# === part 1: the A/B/C set (18 invocations, 2026-11-21 22:09 - 22:56, the crashed child's runs) ===
+=== A-default | IQ2_M pp=2048 env:none 2026-11-21T22:09:49-08:00
+    loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 15.71 GiB | W8 just-in-time | chunk 4096 | ctx 2064 | load 6014 ms
+    pp2048 run 0: 28205.1 ms  ->  72.6 tokens/s
+    pp2048 run 1: 28621.7 ms  ->  71.6 tokens/s
+    pp2048 run 2: 28514.4 ms  ->  71.8 tokens/s
+=== B-flag | IQ2_M pp=2048 env:ARC_PROMPT_DPAS=1 2026-11-21T22:12:35-08:00
+    inferzero: ARC_PROMPT_DPAS: this GPU's driver offers no DPAS (Xe-LPG has none): prompt GEMMs on DP4a
+    loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 15.71 GiB | W8 just-in-time | chunk 4096 | ctx 2064 | load 6195 ms
+    pp2048 run 0: 26601.8 ms  ->  77.0 tokens/s
+    pp2048 run 1: 28581.3 ms  ->  71.7 tokens/s
+    pp2048 run 2: 28482.1 ms  ->  71.9 tokens/s
+=== C-proxy | IQ2_M pp=2048 env:ARC_PROMPT_DPAS=1 ARC_XMX_TRY=2 2026-11-21T22:15:09-08:00
+    (runz exit 1)
+    inferzero: XMX on for the prompt GEMMs (results checked against DP4a)
+    inferzero: ARC_PROMPT_DPAS: this GPU's driver offers no DPAS (Xe-LPG has none): prompt GEMMs on DP4a
+    loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 15.71 GiB | W8 just-in-time | chunk 4096 | ctx 2064 | load 12012 ms
+=== A-default | IQ2_M pp=1024 env:none 2026-11-21T22:17:45-08:00
+    loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 15.66 GiB | W8 just-in-time | chunk 4096 | ctx 1040 | load 6150 ms
+    pp1024 run 0: 13747.8 ms  ->  74.5 tokens/s
+    pp1024 run 1: 13931.8 ms  ->  73.5 tokens/s
+    pp1024 run 2: 14956.9 ms  ->  68.5 tokens/s
+=== B-flag | IQ2_M pp=1024 env:ARC_PROMPT_DPAS=1 2026-11-21T22:19:41-08:00
+    inferzero: ARC_PROMPT_DPAS: this GPU's driver offers no DPAS (Xe-LPG has none): prompt GEMMs on DP4a
+    loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 15.66 GiB | W8 just-in-time | chunk 4096 | ctx 1040 | load 6058 ms
+    pp1024 run 0: 13824.8 ms  ->  74.1 tokens/s
+    pp1024 run 1: 13911.4 ms  ->  73.6 tokens/s
+    pp1024 run 2: 15045.2 ms  ->  68.1 tokens/s
+=== C-proxy | IQ2_M pp=1024 env:ARC_PROMPT_DPAS=1 ARC_XMX_TRY=2 2026-11-21T22:21:34-08:00
+    inferzero: XMX on for the prompt GEMMs (results checked against DP4a)
+    inferzero: ARC_PROMPT_DPAS: this GPU's driver offers no DPAS (Xe-LPG has none): prompt GEMMs on DP4a
+    loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 15.66 GiB | W8 just-in-time | chunk 4096 | ctx 1040 | load 6168 ms
+    pp1024 run 0: 21627.3 ms  ->  47.3 tokens/s
+    pp1024 run 1: 22492.3 ms  ->  45.5 tokens/s
+    pp1024 run 2: 22783.6 ms  ->  44.9 tokens/s
+=== A-default | IQ2_M pp=512 env:none 2026-11-21T22:23:54-08:00
+    loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 15.64 GiB | W8 just-in-time | chunk 4096 | ctx 528 | load 6140 ms
+    pp512 run 0: 7286.1 ms  ->  70.3 tokens/s
+    pp512 run 1: 7332.7 ms  ->  69.8 tokens/s
+    pp512 run 2: 7347.9 ms  ->  69.7 tokens/s
+=== B-flag | IQ2_M pp=512 env:ARC_PROMPT_DPAS=1 2026-11-21T22:25:26-08:00
+    inferzero: ARC_PROMPT_DPAS: this GPU's driver offers no DPAS (Xe-LPG has none): prompt GEMMs on DP4a
+    loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 15.64 GiB | W8 just-in-time | chunk 4096 | ctx 528 | load 5979 ms
+    pp512 run 0: 7301.4 ms  ->  70.1 tokens/s
+    pp512 run 1: 7329.1 ms  ->  69.9 tokens/s
+    pp512 run 2: 7336.2 ms  ->  69.8 tokens/s
+=== C-proxy | IQ2_M pp=512 env:ARC_PROMPT_DPAS=1 ARC_XMX_TRY=2 2026-11-21T22:26:58-08:00
+    inferzero: XMX on for the prompt GEMMs (results checked against DP4a)
+    inferzero: ARC_PROMPT_DPAS: this GPU's driver offers no DPAS (Xe-LPG has none): prompt GEMMs on DP4a
+    loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 15.64 GiB | W8 just-in-time | chunk 4096 | ctx 528 | load 6136 ms
+    pp512 run 0: 11755.9 ms  ->  43.6 tokens/s
+    pp512 run 1: 11554.2 ms  ->  44.3 tokens/s
+    pp512 run 2: 12281.1 ms  ->  41.7 tokens/s
+=== A-default | Q4_K_S pp=2048 env:none 2026-11-21T22:28:46-08:00
+    loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 22.52 GiB | W8 just-in-time | chunk 4096 | ctx 2064 | load 41648 ms
+    pp2048 run 0: 28423.3 ms  ->  72.1 tokens/s
+    pp2048 run 1: 28669.2 ms  ->  71.4 tokens/s
+    pp2048 run 2: 28494.0 ms  ->  71.9 tokens/s
+=== B-flag | Q4_K_S pp=2048 env:ARC_PROMPT_DPAS=1 2026-11-21T22:32:04-08:00
+    inferzero: ARC_PROMPT_DPAS: this GPU's driver offers no DPAS (Xe-LPG has none): prompt GEMMs on DP4a
+    loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 22.52 GiB | W8 just-in-time | chunk 4096 | ctx 2064 | load 25990 ms
+    pp2048 run 0: 27528.3 ms  ->  74.4 tokens/s
+    pp2048 run 1: 28431.2 ms  ->  72.0 tokens/s
+    pp2048 run 2: 28443.9 ms  ->  72.0 tokens/s
+=== C-proxy | Q4_K_S pp=2048 env:ARC_PROMPT_DPAS=1 ARC_XMX_TRY=2 2026-11-21T22:35:10-08:00
+    inferzero: XMX on for the prompt GEMMs (results checked against DP4a)
+    inferzero: ARC_PROMPT_DPAS: this GPU's driver offers no DPAS (Xe-LPG has none): prompt GEMMs on DP4a
+    loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 22.52 GiB | W8 just-in-time | chunk 4096 | ctx 2064 | load 20435 ms
+    pp2048 run 0: 33173.8 ms  ->  61.7 tokens/s
+    pp2048 run 1: 34835.7 ms  ->  58.8 tokens/s
+    pp2048 run 2: 37610.1 ms  ->  54.5 tokens/s
+=== A-default | Q4_K_S pp=1024 env:none 2026-11-21T22:38:27-08:00
+    loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 22.47 GiB | W8 just-in-time | chunk 4096 | ctx 1040 | load 95363 ms
+    pp1024 run 0: 16249.0 ms  ->  63.0 tokens/s
+    pp1024 run 1: 16500.1 ms  ->  62.1 tokens/s
+    pp1024 run 2: 16608.9 ms  ->  61.7 tokens/s
+=== B-flag | Q4_K_S pp=1024 env:ARC_PROMPT_DPAS=1 2026-11-21T22:42:03-08:00
+    inferzero: ARC_PROMPT_DPAS: this GPU's driver offers no DPAS (Xe-LPG has none): prompt GEMMs on DP4a
+    loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 22.47 GiB | W8 just-in-time | chunk 4096 | ctx 1040 | load 84171 ms
+    pp1024 run 0: 15948.7 ms  ->  64.2 tokens/s
+    pp1024 run 1: 16499.2 ms  ->  62.1 tokens/s
+    pp1024 run 2: 16375.9 ms  ->  62.5 tokens/s
+=== C-proxy | Q4_K_S pp=1024 env:ARC_PROMPT_DPAS=1 ARC_XMX_TRY=2 2026-11-21T22:45:27-08:00
+    inferzero: XMX on for the prompt GEMMs (results checked against DP4a)
+    inferzero: ARC_PROMPT_DPAS: this GPU's driver offers no DPAS (Xe-LPG has none): prompt GEMMs on DP4a
+    loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 22.47 GiB | W8 just-in-time | chunk 4096 | ctx 1040 | load 21034 ms
+    pp1024 run 0: 20111.3 ms  ->  50.9 tokens/s
+    pp1024 run 1: 21196.6 ms  ->  48.3 tokens/s
+    pp1024 run 2: 21281.5 ms  ->  48.1 tokens/s
+=== A-default | Q4_K_S pp=512 env:none 2026-11-21T22:48:02-08:00
+    loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 22.45 GiB | W8 just-in-time | chunk 4096 | ctx 528 | load 90015 ms
+    pp512 run 0: 10079.6 ms  ->  50.8 tokens/s
+    pp512 run 1: 10866.3 ms  ->  47.1 tokens/s
+    pp512 run 2: 10756.4 ms  ->  47.6 tokens/s
+=== B-flag | Q4_K_S pp=512 env:ARC_PROMPT_DPAS=1 2026-11-21T22:51:12-08:00
+    inferzero: ARC_PROMPT_DPAS: this GPU's driver offers no DPAS (Xe-LPG has none): prompt GEMMs on DP4a
+    loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 22.45 GiB | W8 just-in-time | chunk 4096 | ctx 528 | load 20726 ms
+    pp512 run 0: 9738.0 ms  ->  52.6 tokens/s
+    pp512 run 1: 9768.1 ms  ->  52.4 tokens/s
+    pp512 run 2: 10509.5 ms  ->  48.7 tokens/s
+=== C-proxy | Q4_K_S pp=512 env:ARC_PROMPT_DPAS=1 ARC_XMX_TRY=2 2026-11-21T22:53:10-08:00
+    inferzero: XMX on for the prompt GEMMs (results checked against DP4a)
+    inferzero: ARC_PROMPT_DPAS: this GPU's driver offers no DPAS (Xe-LPG has none): prompt GEMMs on DP4a
+    loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 22.45 GiB | W8 just-in-time | chunk 4096 | ctx 528 | load 103947 ms
+    pp512 run 0: 13054.3 ms  ->  39.2 tokens/s
+    pp512 run 1: 13062.4 ms  ->  39.2 tokens/s
+    pp512 run 2: 13062.0 ms  ->  39.2 tokens/s
+=== D-thr4096 | IQ2_M pp=2048 env:ARC_PROMPT_DPAS=1 ARC_XMX_TRY=2 ARC_PROMPT_DPAS_T=4096 2026-11-21T22:56:46-08:00
+    (runz exit 143)
+    inferzero: XMX on for the prompt GEMMs (results checked against DP4a)
+    inferzero: ARC_PROMPT_DPAS: this GPU's driver offers no DPAS (Xe-LPG has none): prompt GEMMs on DP4a
+    loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 15.71 GiB | W8 just-in-time | chunk 4096 | ctx 2064 | load 13022 ms
+=== E-thr512 | IQ2_M pp=2048 env:ARC_PROMPT_DPAS=1 ARC_XMX_TRY=2 ARC_PROMPT_DPAS_T=512 2026-11-22T10:23:45-08:00
+    (runz exit 143)
+    inferzero: XMX on for the prompt GEMMs (results checked against DP4a)
+    inferzero: ARC_PROMPT_DPAS: this GPU's driver offers no DPAS (Xe-LPG has none): prompt GEMMs on DP4a
+    loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 15.71 GiB | W8 just-in-time | chunk 4096 | ctx 2064 | load 6390 ms
+
+# === part 2: Q4_K_S pp512 A/B again (page-cache dip in part 1) + threshold probes, 2026-11-22 10:30 ===
+=== A-default | Q4_K_S pp=512 env:none 2026-11-22T10:30:16-08:00
+    (runz exit 0)
+    loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 22.45 GiB | W8 just-in-time | chunk 4096 | ctx 528 | load 26621 ms
+    pp512 run 0: 9867.9 ms  ->  51.9 tokens/s
+    pp512 run 1: 10407.6 ms  ->  49.2 tokens/s
+    pp512 run 2: 10644.0 ms  ->  48.1 tokens/s
+=== B-flag | Q4_K_S pp=512 env:ARC_PROMPT_DPAS=1 2026-11-22T10:32:22-08:00
+    (runz exit 0)
+    inferzero: ARC_PROMPT_DPAS: this GPU's driver offers no DPAS (Xe-LPG has none): prompt GEMMs on DP4a
+    loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 22.45 GiB | W8 just-in-time | chunk 4096 | ctx 528 | load 20319 ms
+    pp512 run 0: 9622.7 ms  ->  53.2 tokens/s
+    pp512 run 1: 9663.6 ms  ->  53.0 tokens/s
+    pp512 run 2: 10792.5 ms  ->  47.4 tokens/s
+=== D-thr4096 | IQ2_M pp=512 env:ARC_PROMPT_DPAS=1 ARC_XMX_TRY=2 ARC_PROMPT_DPAS_T=4096 ARC_BENCH_RUNS=1 2026-11-22T10:34:19-08:00
+    (runz exit 0)
+    inferzero: XMX on for the prompt GEMMs (results checked against DP4a)
+    inferzero: ARC_PROMPT_DPAS: this GPU's driver offers no DPAS (Xe-LPG has none): prompt GEMMs on DP4a
+    loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 15.64 GiB | W8 just-in-time | chunk 4096 | ctx 528 | load 13619 ms
+    pp512 run 0: 38143.9 ms  ->  13.4 tokens/s
+=== E-thr512 | IQ2_M pp=512 env:ARC_PROMPT_DPAS=1 ARC_XMX_TRY=2 ARC_PROMPT_DPAS_T=512 ARC_BENCH_RUNS=1 2026-11-22T10:36:17-08:00
+    (runz exit 0)
+    inferzero: XMX on for the prompt GEMMs (results checked against DP4a)
+    inferzero: ARC_PROMPT_DPAS: this GPU's driver offers no DPAS (Xe-LPG has none): prompt GEMMs on DP4a
+    loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 15.64 GiB | W8 just-in-time | chunk 4096 | ctx 528 | load 6160 ms
+    pp512 run 0: 11275.6 ms  ->  45.4 tokens/s
+=== done 2026-11-22T10:37:40-08:00
+
+# === part 3: the T=4096 / T=512 probes again with the IQ2_M file warmed into the page cache, 2026-11-22 10:38 ===
+=== D-thr4096 pp=512 env:ARC_PROMPT_DPAS=1 ARC_XMX_TRY=2 ARC_PROMPT_DPAS_T=4096 2026-11-22T10:38:00-08:00
+    (runz exit 0)
+    inferzero: XMX on for the prompt GEMMs (results checked against DP4a)
+    inferzero: ARC_PROMPT_DPAS: this GPU's driver offers no DPAS (Xe-LPG has none): prompt GEMMs on DP4a
+    loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 15.64 GiB | W8 just-in-time | chunk 4096 | ctx 528 | load 5719 ms
+    pp512 run 0: 25975.5 ms  ->  19.7 tokens/s
+    pp512 run 1: 27908.8 ms  ->  18.3 tokens/s
+    pp512 run 2: 25831.3 ms  ->  19.8 tokens/s
+=== E-thr512 pp=512 env:ARC_PROMPT_DPAS=1 ARC_XMX_TRY=2 ARC_PROMPT_DPAS_T=512 2026-11-22T10:40:35-08:00
+    (runz exit 0)
+    inferzero: XMX on for the prompt GEMMs (results checked against DP4a)
+    inferzero: ARC_PROMPT_DPAS: this GPU's driver offers no DPAS (Xe-LPG has none): prompt GEMMs on DP4a
+    loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 15.64 GiB | W8 just-in-time | chunk 4096 | ctx 528 | load 5701 ms
+    pp512 run 0: 11514.0 ms  ->  44.5 tokens/s
+    pp512 run 1: 12276.8 ms  ->  41.7 tokens/s
+    pp512 run 2: 12190.8 ms  ->  42.0 tokens/s
+=== done 2026-11-22T10:42:38-08:00
