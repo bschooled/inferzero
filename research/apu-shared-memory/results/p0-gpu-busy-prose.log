@@ -1,0 +1,65 @@
+=== Rusticl warning: Patched Mesa libclc not detected. Upstream libclc may contain known bugs or breaking changes and isn't guaranteed to work reliably. Please visit https://gitlab.freedesktop.org/karolherbst/mesa-libclc for more information. ===
+loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 16.86 GiB | W8 just-in-time | chunk 4096 | ctx 8192 | load 13995 ms
+
+=== INFERZERO_GPU_BUSY SUMMARY (69 windows, 199 tokens, 130/182 drafts accepted) ===
+  window total : wall  24867.3 ms (360.40 ms/win) | GPU  21629.7 ms ( 87.0% busy) | GEMM  18368.3 ms | gap  3237.6 ms ( 13.0%) | host_submit 9258.6 ms | host_wait  15042.3 ms
+  draft phase  : wall   3414.1 ms ( 49.48 ms/win, 13.7% of win) | GPU   2910.1 ms ( 85.2% busy) | GEMM   2830.0 ms | gap   503.9 ms ( 14.8%) | submit   56.4 ms | launches 53.9/win
+  verify phase : wall  20796.2 ms (301.39 ms/win, 83.6% of win) | GPU  18247.8 ms ( 87.7% busy) | GEMM  15538.4 ms | gap  2548.4 ms ( 12.3%) | submit 9103.7 ms | launches 1544.6/win
+  verify_done  : wall    657.1 ms (  9.52 ms/win,  2.6% of win) | GPU    471.8 ms ( 71.8% busy) | gap   185.3 ms ( 28.2%) | submit   98.5 ms | launches 73.0/win
+  pass rate    : 2.775 passes/s | engine rd_bytes 13.74 GB/pass -> 38.14 GB/s effective (verify GPU-only 51.97 GB/s, verify GEMM-only 61.03 GB/s)
+  per-window CSV written to: research/apu-shared-memory/results/p0-gpu-busy-prose.csv
+prompt: 85 tokens | time to first token 3070.2 ms (27.7 t/s)
+top-10 next token: 760(0.8837) 1919(0.1135) 40(0.0023) 9764(0.0001) 24342(0.0001) 2381(0.0000) 36948(0.0000) 8160(0.0000) 6820(0.0000) 4272(0.0000)
+greedy: 760 1156 369 9859 364 264 11346 10597 8627 883 4475 17120 14931 494 1559 63164 5638 20459 310 17744 89838 74593 13 1061 369 264 6150 10597 8282 421 7225 5365 6337 314 4475 5757 11 5638 5757 11 321 4098 23470 13 271 9764 728 5759 411 8627 15060 25 271 16 13 27416 471 19427 279 6228 364 279 41052 6206 198 17 13 561 1559 63164 11057 471 3437 8343 30762 6749 1040 198 18 13 561 17744 33298 13395 471 3437 5324 321 3069 198 19 13 7884 37972 6355 61782 198 20 13 8509 23683 7575 45850 14400 198 21 13 9357 95085 1433 37285 303 4098 5757 198 22 13 50164 26079 1172 19899 88 944 31600 198 23 13 35326 41052 9989 318 60187 61312 11 45228 11 21631 3392 11 4831 5946 198 24 13 10646 8343 14018 1990 3063 198 16 15 13 71366 471 561 3725 17865 271 40 1144 310 381 30515 12995 321 3300 21333 7739 13 6558 728 1683 1472 1754 3644 15060 13 271 1536 18369 310 3311 25 198 12 14269 11147 8232 23956 5972 13 5638 11147 8232 17066 198 12 7884 430
+generation: 200 tokens in 25018.1 ms (7.99 t/s)
+weights read: 16680 MB per pass, 46.0 GB/s (52 % of this GPU's measured 88 GB/s) (drafter weights not counted)
+MTP: 182 drafts, 130 accepted (71.4 %), 2.90 tokens per main-model pass (69 passes)
+MTP time: drafting 3414.3 ms, verification 20796.2 ms (301.4 ms a pass), verify_done 657.1 ms
+----- text -----
+The user is asking for a detailed technical essay about database architecture evolution from monolithic storage engines to disaggregated architectures. This is a complex technical topic that requires deep knowledge of database systems, storage systems, and distributed computing.
+
+Let me structure this essay carefully:
+
+1. Introduction - Setting the stage for the architectural shift
+2. The monolithic era - What traditional databases looked like
+3. The disaggregation revolution - What changed and why
+4. Network latency trade-offs
+5. Local NVMe caching strategies
+6. Write-ahead log durability in distributed systems
+7. Elastic scaling under bursty workloads
+8. Concrete architectural examples (Snowflake, Aurora, TiDB, etc.)
+9. Where traditional designs still win
+10. Conclusion - The future landscape
+
+I need to be technically accurate and provide genuine depth. Let me think through each section carefully.
+
+Key concepts to cover:
+- Storage-compute separation vs. storage-compute integration
+- Network as
+----------------
+GPU time by kernel (last profiled forward): total 21629.7 ms
+  gemm_down             3219.55 ms   14.9%  (6806 launches)
+  gemm_gate             3149.28 ms   14.6%  (6806 launches)
+  gemm_up               3144.73 ms   14.5%  (6806 launches)
+  lm_head               3002.25 ms   13.9%  (251 launches)
+  gemm_qkv              2331.41 ms   10.8%  (4968 launches)
+  gdn_recur             1257.45 ms    5.8%  (7488 launches)
+  gemm_ssm_out           966.22 ms    4.5%  (4968 launches)
+  gemm_z                 952.29 ms    4.4%  (4968 launches)
+  gemm_q                 658.14 ms    3.0%  (1838 launches)
+  gemm_o                 465.05 ms    2.2%  (1838 launches)
+  rmsnorm_quant          370.65 ms    1.7%  (13863 launches)
+  attention              354.96 ms    1.6%  (6336 launches)
+  gdn_conv               269.09 ms    1.2%  (4968 launches)
+  swiglu_quant           234.39 ms    1.1%  (6806 launches)
+  attn_prep              200.07 ms    0.9%  (1838 launches)
+  gated_norm_quant       155.10 ms    0.7%  (4968 launches)
+  conv_state_update      144.82 ms    0.7%  (7488 launches)
+  gemm_ab                142.20 ms    0.7%  (4968 launches)
+  gemm_v                 134.04 ms    0.6%  (1838 launches)
+  attn_combine           131.95 ms    0.6%  (6336 launches)
+  gemm_k                 115.04 ms    0.5%  (1838 launches)
+  mtp_eh_proj             88.12 ms    0.4%  (182 launches)
+  gdn_gates               84.06 ms    0.4%  (4968 launches)
+  attn_gate_quant         46.51 ms    0.2%  (1838 launches)
+  mtp_concat              12.33 ms    0.1%  (364 launches)

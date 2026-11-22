@@ -1,0 +1,6 @@
+drm_card: /sys/class/drm/card1
+i915_pmu_type: 14 | pmu_open_ok: yes (errno=0, euid=0, perf_event_paranoid=2)
+i915_oa: perf_stream_paranoid=1, oa_max_sample_rate=100000
+l0_sysman_engine: zesDeviceEnumEngineGroups returned 0x0, count=7 [types: g0(t=5,act=0,ts=57,r=0) g1(t=6,act=0,ts=44,r=0) g2(t=6,act=0,ts=38,r=0) g3(t=7,act=0,ts=33,r=0) g4(t=7,act=0,ts=27,r=0) g5(t=8,act=0,ts=20,r=0) g6(t=9,act=0,ts=14,r=0)] (domains=7)
+sysfs_gt0: rc6_residency_ms=5465443, rps_act_freq_mhz=0
+sysfs_gt1: rc6_residency_ms=7052431, rps_act_freq_mhz=0

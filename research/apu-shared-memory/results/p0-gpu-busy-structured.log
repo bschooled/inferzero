@@ -1,0 +1,55 @@
+=== Rusticl warning: Patched Mesa libclc not detected. Upstream libclc may contain known bugs or breaking changes and isn't guaranteed to work reliably. Please visit https://gitlab.freedesktop.org/karolherbst/mesa-libclc for more information. ===
+loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 16.86 GiB | W8 just-in-time | chunk 4096 | ctx 8192 | load 7214 ms
+
+=== INFERZERO_GPU_BUSY SUMMARY (54 windows, 199 tokens, 145/160 drafts accepted) ===
+  window total : wall  18880.5 ms (349.64 ms/win) | GPU  16347.4 ms ( 86.6% busy) | GEMM  13865.7 ms | gap  2533.1 ms ( 13.4%) | host_submit 6692.9 ms | host_wait  11770.4 ms
+  draft phase  : wall   2780.0 ms ( 51.48 ms/win, 14.7% of win) | GPU   2407.5 ms ( 86.6% busy) | GEMM   2330.2 ms | gap   372.5 ms ( 13.4%) | submit   39.5 ms | launches 61.6/win
+  verify phase : wall  15883.4 ms (294.14 ms/win, 84.1% of win) | GPU  13787.9 ms ( 86.8% busy) | GEMM  11535.5 ms | gap  2095.6 ms ( 13.2%) | submit 6622.9 ms | launches 1560.2/win
+  verify_done  : wall    217.1 ms (  4.02 ms/win,  1.1% of win) | GPU    152.0 ms ( 70.0% busy) | gap    65.1 ms ( 30.0%) | submit   30.5 ms | launches 29.3/win
+  pass rate    : 2.860 passes/s | engine rd_bytes 13.74 GB/pass -> 39.31 GB/s effective (verify GPU-only 53.83 GB/s, verify GEMM-only 64.34 GB/s)
+  per-window CSV written to: research/apu-shared-memory/results/p0-gpu-busy-structured.csv
+prompt: 299 tokens | time to first token 5685.1 ms (52.6 t/s)
+top-10 next token: 760(0.7530) 9764(0.1351) 40(0.0665) 24342(0.0130) 1919(0.0078) 5170(0.0028) 21765(0.0020) 16(0.0015) 31248(0.0015) 22916(0.0014)
+greedy: 760 1156 6587 728 310 5335 264 6891 2393 14991 1083 1330 19251 25 198 16 13 4566 36965 318 86133 45553 30474 4566 5978 8 440 4581 6679 25 328 306 487 328 7686 487 328 3810 487 328 47676 487 328 395 487 328 7862 487 328 49901 69084 487 328 2738 1 198 17 13 357 70703 1898 440 279 1788 7890 10300 539 850 13 271 9764 728 4563 279 6891 795 25 271 3002 220 16 25 44614 32391 12 15 16 11 586 38200 12 16 11 25165 12 15 11 220 23 19 19 18 11 2015 12 16417 11 220 24 24 13 24 24 11 4393 198 3002 220 17 25 44614 1402 9121 12 15 17 11 586 36358 12 17 11 25165 12 16 11 220 23 15 23 15 11 2015 67715 1320 11 220 24 24 13 24 20 11 4393 198 3002 220 18 25 44614 18838 12 15 18 11 15098 81183 12 16 11 25165 12 17 11 220 24 17 15 15 11 2015 10162 7214 11 220 24 24 13 24 15 11 87749 198 3002 220 19 25 44614 81010 467
+generation: 200 tokens in 18985.2 ms (10.53 t/s)
+weights read: 17042 MB per pass, 48.5 GB/s (55 % of this GPU's measured 88 GB/s) (drafter weights not counted)
+MTP: 160 drafts, 145 accepted (90.6 %), 3.70 tokens per main-model pass (54 passes)
+MTP time: drafting 2780.1 ms, verification 15883.5 ms (294.1 ms a pass), verify_done 217.1 ms
+----- text -----
+The user wants me to convert a raw service inventory into two formats:
+1. JSON Lines (newline-delimited JSON objects) with exact keys: "id", "service", "region", "tier", "port", "owner", "sla_pct", "status"
+2. A Markdown table with the same columns sorted by id.
+
+Let me parse the raw data:
+
+Row 1: svc-auth-01, us-east-1, tier-0, 8443, team-identity, 99.99, active
+Row 2: svc-billing-02, us-west-2, tier-1, 8080, team-payments, 99.95, active
+Row 3: svc-search-03, eu-central-1, tier-2, 9200, team-discovery, 99.90, degraded
+Row 4: svc-ingest
+----------------
+GPU time by kernel (last profiled forward): total 16347.4 ms
+  lm_head               2456.95 ms   15.0%  (214 launches)
+  gemm_down             2349.61 ms   14.4%  (5344 launches)
+  gemm_gate             2339.03 ms   14.3%  (5344 launches)
+  gemm_up               2338.59 ms   14.3%  (5344 launches)
+  gemm_qkv              1816.73 ms   11.1%  (3888 launches)
+  gdn_recur              797.40 ms    4.9%  (4680 launches)
+  gemm_ssm_out           701.43 ms    4.3%  (3888 launches)
+  gemm_z                 685.67 ms    4.2%  (3888 launches)
+  gemm_q                 487.27 ms    3.0%  (1456 launches)
+  gemm_o                 328.33 ms    2.0%  (1456 launches)
+  attention              326.08 ms    2.0%  (5438 launches)
+  rmsnorm_quant          307.08 ms    1.9%  (10902 launches)
+  gdn_conv               229.87 ms    1.4%  (3888 launches)
+  swiglu_quant           189.05 ms    1.2%  (5344 launches)
+  attn_prep              160.40 ms    1.0%  (1456 launches)
+  attn_combine           135.64 ms    0.8%  (5438 launches)
+  gated_norm_quant       126.72 ms    0.8%  (3888 launches)
+  gemm_ab                104.34 ms    0.6%  (3888 launches)
+  gemm_v                 100.76 ms    0.6%  (1456 launches)
+  conv_state_update       92.08 ms    0.6%  (4680 launches)
+  gemm_k                  87.52 ms    0.5%  (1456 launches)
+  mtp_eh_proj             69.45 ms    0.4%  (160 launches)
+  gdn_gates               64.96 ms    0.4%  (3888 launches)
+  attn_gate_quant         41.63 ms    0.3%  (1456 launches)
+  mtp_concat              10.77 ms    0.1%  (320 launches)
