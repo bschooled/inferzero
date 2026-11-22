@@ -599,6 +599,8 @@ __kernel void rd_strip(__global const uint* p, __global uint* out, int per_item)
     last_drafts_.clear();  // (a verification pass never settled, a batch that threw: nothing left of them)
     vrows_ = dfl_used_ = spec_ = false;
     mtp_window_ = false;  // (P2: no half window survives a reset)
+    mtp_verified_ = false;
+    mtp_pending_ = 0;
     mtp_ar_left_ = 0;
     mtp_ar_set_ = -1;
     batch_.clear();

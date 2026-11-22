@@ -1,0 +1,9 @@
+loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 16.40 GiB | W8 just-in-time | chunk 4096 | ctx 128 | load 12356 ms
+inferzero: MTP adaptive depth: 36 windows, chosen depths d2:3 d3:29 d4:4; expected accepted drafts e = 0.77 1.68 2.22 2.87 3.50; bands: dstep / v1 / vrow = [0] 22.2 / 253 / 15.7
+prompt: 8 tokens | time to first token 5142.7 ms (1.6 t/s)
+top-10 next token: 271(0.4781) 1358(0.0998) 3297(0.0390) 198(0.0296) 28763(0.0247) 4844(0.0211) 16743(0.0199) 7054(0.0123) 3437(0.0090) 561(0.0090)
+greedy: 271 2114 5607 366 369 264 21078 9485 14429 15487 27355 11767 421 47493 264 328 66125 1 2315 494 279 1287 11 45127 279 9376 5255 1083 1330 1146 64633 83581 440 5255 2599 1056 279 25212 321 799 440 5255 6826 1056 279 25212 2218 3282 51070 16298 279 1788 1817 310 1754 1146 1595 2980 781 513 10300 11 5326 33041 1070 2094 279 25212 13 1061 5313 79744 449 5289 37208 854 22373 314 496 1393 1433 307 681 3154 424 10727 364 3349 28465 11 3384 1141 11447 37208 4906 628
+generation: 96 tokens in 13095.0 ms (7.33 t/s)
+weights read: 16774 MB per pass, 46.1 GB/s (53 % of this GPU's measured 87 GB/s) (drafter weights not counted)
+MTP: 98 drafts, 59 accepted (60.2 %), 2.67 tokens per main-model pass (36 passes)
+MTP time: drafting 2156.5 ms, verification 10780.2 ms (299.4 ms a pass), verify_done 71.9 ms

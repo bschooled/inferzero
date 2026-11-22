@@ -782,7 +782,8 @@
   // context band (<=512, <=2048, <=8192, more): the window's cost and the prompt's draftability follow the context.
   // The seeds are the laptop's measured IQ2_M + MTP d3 window (research/apu-shared-memory/P0-gpu-busy.md:
   // 252.7 ms AR, ~301.4 ms at T=4, ~18.3 ms a draft step, ~2.0 accepted drafts at d3) and fade with observations.
-  // The pick is pure (the caller may ask before mtp_draft, which asks again): only verify_done() advances state.
+  // The pick is made once per window: a caller that asks leaves mtp_pending_ for mtp_draft to consume; only
+  // verify_done() advances the observations and the probe schedule moves at most once per window.
   struct MtpCtlBand {
     double dstep = 18.3;  // ms of one draft step (EMA of the draft phase / its steps)
     int steps = 0;        // (observations behind dstep)
@@ -800,7 +801,9 @@
   int mtp_windows_ = 0;     // (decode windows observed)
   int mtp_have_ = 3;        // (deepest draft index accepted; the static d3 being replaced is the cold start)
   int mtp_pick_ = 3;        // (the last chosen depth)
+  int mtp_pending_ = 0, mtp_pending_pos_ = -1;  // (a caller's pick for this position; mtp_draft consumes it)
   bool mtp_censored_ = false;  // (the last window accepted every draft: a censored chain, worth probing one deeper)
+  int mtp_probe_at_ = 16;   // (the window at which the next mask retry / deeper probe may run)
   int mtp_band_cur_ = -1;   // (a context-band change clears the masks: the new band's data takes over)
   int mtp_ar_left_ = 0;     // (pure-AR windows still to run: EV(0) won)
   int mtp_ar_set_ = -1;     // (the window whose pick armed mtp_ar_left_, so the pick's second call does not re-arm)
@@ -824,10 +827,13 @@
     if (d < 1 || d > kMaxDrafts || mtp_mask_[d]) return 0.0;
     return std::max(0.0, mtp_ea_[d] - mtp_ea_[d - 1]);
   }
-  // Once per window (pure): 0 = run this window without drafts (pure AR), else the depth to draft.
+  // Once per window: 0 = run this window without drafts (pure AR), else the depth to draft. Advances the probe
+  // schedule, so a caller that asks must let mtp_draft consume the pending pick (mtp_pending_) rather than
+  // letting it ask a second time; mtp_draft asks for itself when no pick was made (bench paths).
   int mtp_adaptive_pick(int cap) {
     cap = std::clamp(cap, 1, kMaxDrafts);
     if (!mtp_ctl_on(cap)) return cap;
+    mtp_pending_ = 0;
     const int band = mtp_ctl_band();
     if (band != mtp_band_cur_) {  // (the context left its band: retest what it had masked)
       mtp_band_cur_ = band;
@@ -836,18 +842,24 @@
     if (mtp_ar_left_ > 0) return 0;
     if (mtp_probe_after_ar_) {  // (gufo: one probe draft after the AR backoff, to detect recovery)
       mtp_probe_after_ar_ = false;
-      mtp_pick_ = 1;
+      mtp_pick_ = mtp_pending_ = 1;
+      mtp_pending_pos_ = pos;
       return 1;
     }
     const MtpCtlBand& b = mtp_band_[band];
     const int have = std::min(cap, std::max(1, mtp_have_));
-    // every 16 windows: retry the lowest masked depth, or probe one deeper after a censored (fully accepted) chain
-    if (mtp_windows_ > 0 && mtp_windows_ % 16 == 0) {
-      int mp = -1;
+    // every 16 windows (or the first censored one after): retry the lowest masked depth, or probe one deeper
+    if (mtp_windows_ >= mtp_probe_at_) {
+      int target = -1;
       for (int d = 1; d <= have; ++d)
-        if (mtp_mask_[d]) { mp = d; break; }
-      if (mp > 0) { mtp_pick_ = mp; return mp; }
-      if (mtp_censored_ && have < cap) { mtp_pick_ = have + 1; return have + 1; }
+        if (mtp_mask_[d]) { target = d; break; }
+      if (target < 0 && mtp_censored_ && have < cap) target = have + 1;
+      if (target > 0) {
+        mtp_probe_at_ = mtp_windows_ + 16;
+        mtp_pick_ = mtp_pending_ = target;
+        mtp_pending_pos_ = pos;
+        return target;
+      }
     }
     const double ev0 = 1.0 / std::max(1.0, b.v1);
     double best_ev = ev0;
@@ -866,7 +878,8 @@
                              std::max(1.0, b.v1 + mtp_pick_ * (b.dstep + b.vrow));
       if (best_ev < ev_last * 1.015) best = mtp_pick_;
     }
-    mtp_pick_ = best;
+    mtp_pick_ = mtp_pending_ = best;
+    mtp_pending_pos_ = pos;
     return best;
   }
   // The caller ran a pure-AR window the pick asked for: count it down (gufo's 16-token AR backoff).
@@ -1038,7 +1051,11 @@
     toks.push_back(tok);
     pend_toks_.clear();
     max_drafts = std::clamp(max_drafts, 1, std::clamp(opt.mtp_drafts, 1, kMaxDrafts));
-    if (ctl) max_drafts = std::clamp(mtp_adaptive_pick(max_drafts), 1, max_drafts);  // (P2: this window's depth)
+    if (ctl) {  // (P2: this window's depth: the caller's pending pick, or ask now)
+      const int pick = mtp_pending_ > 0 && mtp_pending_pos_ == pos ? mtp_pending_ : mtp_adaptive_pick(max_drafts);
+      mtp_pending_ = 0;
+      max_drafts = std::clamp(std::min(max_drafts, pick), 1, max_drafts);
+    }
     if (dfl_) max_drafts = std::min(max_drafts, mtp_block_drafts());  // (with DFlash2 the drafts setting is its 7)
     if (pos + 1 + max_drafts > ctx) max_drafts = std::max(1, ctx - pos - 1);
     std::vector<int> drafts;

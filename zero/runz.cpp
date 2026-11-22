@@ -1632,7 +1632,6 @@ static int run_main(int argc, char** argv) {
       printf("MTP time: drafting %.1f ms, verification %.1f ms (%.1f ms a pass), verify_done %.1f ms\n", mtp_draft_ms,
              mtp_verify_ms, mtp_verify_ms / steps, mtp_done_ms);
     eng.busy_report();
-    eng.mtp_adaptive_report();
     if (show) printf("----- text -----\n%s\n----------------\n", vocab.decode(gen).c_str());
   }
   if (prof) {
