@@ -668,6 +668,8 @@ class Server {
     int slot = 0, tok = 0, max_drafts = 0;  // max_drafts 0: one token without drafts
     bool done = false, alone = false;       // done: run by another request; alone: run it yourself
     bool dflash = false, batched = false;
+    bool copy = false;   // (M5-P3: the window's drafts began with copy proposals; last_draft_copy)
+    int copy_n = 0;      // (how many of them: last_draft_copy_n)
     bool ar_backoff = false;  // (P2: the adaptive controller asked for a pure-AR window)
     std::vector<int> drafts;
     std::vector<float> rows;  // logits of the token and of each draft
@@ -721,6 +723,8 @@ class Server {
       if (g.max_drafts > 0) {
         g.drafts = eng_.mtp_draft(g.tok, g.max_drafts, hist(g.slot));
         g.dflash = eng_.last_draft_dflash();
+        g.copy = eng_.last_draft_copy();
+        g.copy_n = eng_.last_draft_copy_n();
         const auto& lv = eng_.verify(g.tok, g.drafts);
         g.rows.assign(lv.begin(), lv.begin() + (1 + g.drafts.size()) * V);
       } else {
@@ -737,6 +741,8 @@ class Server {
         eng_.bind(g->slot);
         g->drafts = eng_.mtp_draft(g->tok, std::min(g->max_drafts, nd), hist(g->slot));
         g->dflash = eng_.last_draft_dflash();
+        g->copy = eng_.last_draft_copy();
+        g->copy_n = eng_.last_draft_copy_n();
         rows.push_back({g->tok});
         rows.back().insert(rows.back().end(), g->drafts.begin(), g->drafts.end());
       }
@@ -1021,7 +1027,7 @@ int main(int argc, char** argv) {
       {"--mtp", ""}, {"--mtp-model", "an MTP head .gguf"}, {"--dflash", "a DFlash2 drafter folder (with model.safetensors)"}, {"--no-dflash", ""},
       {"--draft", "auto, mtp or dflash"}, {"--mmproj", "an mmproj .gguf file"}, {"--no-mmproj", ""},
       {"--image-min-tokens", "a number of tokens"}, {"--image-max-tokens", "a number of tokens"},
-      {"--mtp-drafts", "a number, e.g. 3"}, {"--mtp-adaptive", ""}, {"--copy-draft", ""}, {"--think-budget", "a number of tokens"}, {"--preserve-thinking", ""},
+      {"--mtp-drafts", "a number, e.g. 3"}, {"--mtp-adaptive", ""}, {"--copy-draft", ""}, {"--mtp-copy-union", ""}, {"--think-budget", "a number of tokens"}, {"--preserve-thinking", ""},
       {"--kernels", "a folder"}, {"--session-cache-gb", "GiB, 0 = off"}, {"--session-dir", "a folder"},
       {"--slots", "1..8"}, {"--gpus", "1..64"}, {"--split", "tensor or layer"}, {"--tensor-split", "shares a GPU, e.g. 3,1"},
       {"--no-swap", ""}, {"--no-web-tools", ""},
@@ -1121,6 +1127,7 @@ int main(int argc, char** argv) {
     }
     else if (a == "--mtp") so.eo.mtp = true;
     else if (a == "--copy-draft") so.eo.copy_draft = true;  // (R1, opt-in)
+    else if (a == "--mtp-copy-union") so.eo.mtp_copy_union = true;  // (M5-P3: copy proposals + MTP drafts, one window)
     // (an MTP head in a file of its own, as runz --mtp-model: Flash Next's from SC117's repository; without it the
     //  server only looks for an mtp-*.gguf in the model's folder. gee456, issue #31, 2026-11-17)
     else if (a == "--mtp-model") { so.eo.mtp_model = next(); so.eo.mtp = true; }

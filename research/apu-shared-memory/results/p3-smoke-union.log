@@ -1,0 +1,20 @@
+pgrep-before:  
+=== Rusticl warning: Patched Mesa libclc not detected. Upstream libclc may contain known bugs or breaking changes and isn't guaranteed to work reliably. Please visit https://gitlab.freedesktop.org/karolherbst/mesa-libclc for more information. ===
+loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 16.39 GiB | W8 just-in-time | chunk 4096 | ctx 112 | load 6973 ms
+inferzero: copy drafting: 9 of 12 drafted windows proposed (75.0 %), 27 tokens, 9 in union windows
+prompt: 47 tokens | time to first token 2354.0 ms (20.0 t/s)
+top-10 next token: 198(0.7950) 271(0.0954) 1358(0.0353) 248046(0.0072) 987(0.0062) 13(0.0052) 695(0.0040) 4831(0.0033) 1(0.0021) 1500(0.0020)
+greedy: 198 1021 2943 25 279 3841 13477 37550 33075 888 279 15217 5388 198 1021 4097 25 279 3841 13477 37550 33075 888 279 15217 5388 198 1021 4590 25 279 3841 13477 37550 33075 888 279 15217 5388 198
+generation: 40 tokens in 3729.8 ms (10.72 t/s)
+weights read: 14758 MB per pass, 47.5 GB/s (54 % of this GPU's measured 88 GB/s) (drafter weights not counted)
+MTP: 36 drafts, 28 accepted (77.8 %), 3.33 tokens per main-model pass (12 passes)
+copy drafting: 9 of 12 steps, 27 drafts, 19 accepted (70.4 %)
+MTP time: drafting 190.6 ms, verification 3510.1 ms (292.5 ms a pass), verify_done 8.6 ms
+----- text -----
+
+line four: the quick brown fox jumps over the lazy dog
+line five: the quick brown fox jumps over the lazy dog
+line six: the quick brown fox jumps over the lazy dog
+
+----------------
+pgrep-after:  

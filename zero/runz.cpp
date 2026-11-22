@@ -469,6 +469,9 @@ static int run_main(int argc, char** argv) {
             "  --mtp-min-p P         draft a second token only above this MTP probability (default 0.5)\n"
             "  --copy-draft          with --mtp: where the last tokens appeared earlier in the context, draft what followed\n"
             "                        them there (copy drafting; the same output, verified as any drafts)\n"
+            "  --mtp-copy-union      with --copy-draft: one verify window of the copy proposals first (up to\n"
+            "                        ARC_COPY_UNION_MAX, default 4; keys from ARC_COPY_UNION_MIN, default 3 tokens) and\n"
+            "                        then MTP drafts up to --mtp-drafts (M5-P3; the MTP block path)\n"
             "engine:\n"
             "  --ctx N               context (default: what the prompt needs)     --chunk N   prompt tokens per step\n"
             "  --feed-step N         feed the prompt in calls of N tokens (tests resuming mid-prompt)\n"
@@ -606,6 +609,7 @@ static int run_main(int argc, char** argv) {
     else if (a == "--mtp-min-p") eo.mtp_min_p = (float)atof(next());
     else if (a == "--mtp-adaptive") eo.mtp_adaptive = true, eo.mtp = true;  // (P2: priced adaptive draft depth)
     else if (a == "--copy-draft") eo.copy_draft = true;  // (R1: drafts copied from the context where it repeats)
+    else if (a == "--mtp-copy-union") eo.mtp_copy_union = true;  // (M5-P3: copy proposals + MTP drafts in one window)
     else if (a == "--kl-ref") kl_ref = next();
     else if (a == "--slots-check") slots_check = true;
     else if (a == "--bench-batch") bench_batch = atoi(next());
@@ -1575,6 +1579,7 @@ static int run_main(int argc, char** argv) {
         }
         const std::vector<int> drafts = eng.mtp_draft(tok, nd, &hist);
         const bool copied = eng.last_draft_copy();
+        const int ncopy = eng.last_draft_copy_n();  // (M5-P3 union: the window's leading copy proposals)
         const auto c1 = std::chrono::steady_clock::now();
         const auto& lv = eng.verify(tok, drafts);
         const auto c2 = std::chrono::steady_clock::now();
@@ -1596,7 +1601,7 @@ static int run_main(int argc, char** argv) {
         ++steps;
         drafted += (int)drafts.size();
         accepted += acc;
-        if (copied) ++copy_steps, copy_drafted += (int)drafts.size(), copy_accepted += acc;
+        if (copied) ++copy_steps, copy_drafted += ncopy, copy_accepted += std::min(acc, ncopy);
         if (stop) break;
         tok = next;
       }
