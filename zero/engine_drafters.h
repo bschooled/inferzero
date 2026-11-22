@@ -766,6 +766,203 @@
     return hp.gemma ? (hp.moe ? 3 : 2) : hp.hc ? 3 : hp.moe ? 5 : hp.n_embd >= 5120 ? 7 : hp.n_embd <= 2560 ? 3 : 2;
   }
   int max_drafts() const { return gemma_mtp_ ? 3 : std::clamp(opt.mtp_drafts, 2, kMaxDrafts); }
+
+  // ---------------------------------------------------------------- P2: priced adaptive draft depth
+  // With opt.mtp_adaptive, the static --mtp-drafts N becomes a ceiling and the depth is decided every decode
+  // window, modelled on gufo's MtpLengthController (research/apu-shared-memory/APPENDIX-gufo.md §2.4) but priced
+  // from this engine's own windows. Greedy verification makes the accepted prefix independent of how many drafts
+  // were asked for, so for every depth d the controller keeps an EWMA of min(accepted, d) over the windows that
+  // drafted at least d (no independence assumption, no estimator for a censored chain):
+  //     EV(d) = (1 + e[d]) / (verify_ms(1) + d * (draft_step_ms + verify_row_ms)),
+  // where verify_ms(T) = a + b*T is fitted online to the window's own timings (steady clocks around mtp_draft /
+  // and verify: no GPU events, no profiling overhead) and EV(0) = 1 / verify_ms(1) is pure AR. If AR wins, a few
+  // AR windows follow and then one draft probes for recovery. A depth that rejects 3 times in a row and whose
+  // marginal token (e[d] - e[d-1]) is below what its cost could pay for is masked (gufo's failed-depth mask) and
+  // retried every 16 windows; a fully accepted top window (censored) probes one deeper. Costs are learned per
+  // context band (<=512, <=2048, <=8192, more): the window's cost and the prompt's draftability follow the context.
+  // The seeds are the laptop's measured IQ2_M + MTP d3 window (research/apu-shared-memory/P0-gpu-busy.md:
+  // 252.7 ms AR, ~301.4 ms at T=4, ~18.3 ms a draft step, ~2.0 accepted drafts at d3) and fade with observations.
+  // The pick is made once per window: a caller that asks leaves mtp_pending_ for mtp_draft to consume; only
+  // verify_done() advances the observations and the probe schedule moves at most once per window.
+  struct MtpCtlBand {
+    double dstep = 18.3;  // ms of one draft step (EMA of the draft phase / its steps)
+    int steps = 0;        // (observations behind dstep)
+    // verify_ms(T) = a + b*T: decayed least-squares sums, plus fixed priors (P0's prose: T=1 252.74, T=4 301.39)
+    double S0 = 0, Sx = 0, Sy = 0, Sxx = 0, Sxy = 0;
+    double v1 = 252.74, vrow = 16.2;  // (v1 = a + b, the AR pass; vrow = b, ms per extra verification row)
+  };
+  static constexpr int kCtlBands = 4;
+  MtpCtlBand mtp_band_[kCtlBands];
+  // per draft index 1..kMaxDrafts: EWMA of min(accepted, d) (decay 0.9), its observations, consecutive rejections, mask
+  double mtp_ea_[kMaxDrafts + 1] = {0, 0.7, 1.4, 2.1, 2.8, 3.5, 4.2, 4.9};  // (weak prior: ~0.7 accepted drafts a step)
+  int mtp_en_[kMaxDrafts + 1] = {0};
+  int mtp_cfail_[kMaxDrafts + 1] = {0};
+  bool mtp_mask_[kMaxDrafts + 1] = {false};
+  int mtp_windows_ = 0;     // (decode windows observed)
+  int mtp_have_ = 3;        // (deepest draft index accepted; the static d3 being replaced is the cold start)
+  int mtp_pick_ = 3;        // (the last chosen depth)
+  int mtp_pending_ = 0, mtp_pending_pos_ = -1;  // (a caller's pick for this position; mtp_draft consumes it)
+  bool mtp_censored_ = false;  // (the last window accepted every draft: a censored chain, worth probing one deeper)
+  int mtp_probe_at_ = 16;   // (the window at which the next mask retry / deeper probe may run)
+  int mtp_band_cur_ = -1;   // (a context-band change clears the masks: the new band's data takes over)
+  int mtp_ar_left_ = 0;     // (pure-AR windows still to run: EV(0) won)
+  int mtp_ar_set_ = -1;     // (the window whose pick armed mtp_ar_left_, so the pick's second call does not re-arm)
+  bool mtp_probe_after_ar_ = false;  // (the AR backoff ended: one draft probe to detect recovery)
+  bool mtp_ctl_suppress_ = false;    // (the load-time warm-up drafts every row count: not evidence)
+  // the last window's timings, from mtp_draft / verify to verify_done's observation
+  double mtp_draft_ms_ = 0, mtp_verify_ms_ = 0;
+  int mtp_drafted_ = 0, mtp_vrows_ = 0, mtp_band_w_ = 0;
+  bool mtp_window_ = false;  // (the last mtp_draft went through the MTP block and its verify ran)
+  bool mtp_verified_ = false;  // (verify() timed this window: not set by a batched verify_batch pass)
+  int mtp_hist_[kMaxDrafts + 1] = {0};  // (chosen depth distribution, for the report)
+  FILE* mtp_csv_ = nullptr;             // (ARC_MTP_ADAPTIVE_CSV: one row a window, for offline auditing)
+  bool mtp_csv_tried_ = false;
+
+  bool mtp_ctl_on(int cap) const {
+    return opt.mtp_adaptive && has_mtp && mtp_block_ && !dfl_ && !gemma_mtp_ && cap > 0 && !mtp_ctl_suppress_;
+  }
+  int mtp_ctl_band() const { return pos <= 512 ? 0 : pos <= 2048 ? 1 : pos <= 8192 ? 2 : 3; }
+  // m(d): the expected extra accepted drafts from the d-th draft (e[d] - e[d-1]; 0 once masked)
+  double mtp_ctl_margin(int d) const {
+    if (d < 1 || d > kMaxDrafts || mtp_mask_[d]) return 0.0;
+    return std::max(0.0, mtp_ea_[d] - mtp_ea_[d - 1]);
+  }
+  // Once per window: 0 = run this window without drafts (pure AR), else the depth to draft. Advances the probe
+  // schedule, so a caller that asks must let mtp_draft consume the pending pick (mtp_pending_) rather than
+  // letting it ask a second time; mtp_draft asks for itself when no pick was made (bench paths).
+  int mtp_adaptive_pick(int cap) {
+    cap = std::clamp(cap, 1, kMaxDrafts);
+    if (!mtp_ctl_on(cap)) return cap;
+    mtp_pending_ = 0;
+    const int band = mtp_ctl_band();
+    if (band != mtp_band_cur_) {  // (the context left its band: retest what it had masked)
+      mtp_band_cur_ = band;
+      for (int d = 1; d <= kMaxDrafts; ++d) mtp_cfail_[d] = 0, mtp_mask_[d] = false;
+    }
+    if (mtp_ar_left_ > 0) return 0;
+    if (mtp_probe_after_ar_) {  // (gufo: one probe draft after the AR backoff, to detect recovery)
+      mtp_probe_after_ar_ = false;
+      mtp_pick_ = mtp_pending_ = 1;
+      mtp_pending_pos_ = pos;
+      return 1;
+    }
+    const MtpCtlBand& b = mtp_band_[band];
+    const int have = std::min(cap, std::max(1, mtp_have_));
+    // every 16 windows (or the first censored one after): retry the lowest masked depth, or probe one deeper
+    if (mtp_windows_ >= mtp_probe_at_) {
+      int target = -1;
+      for (int d = 1; d <= have; ++d)
+        if (mtp_mask_[d]) { target = d; break; }
+      if (target < 0 && mtp_censored_ && have < cap) target = have + 1;
+      if (target > 0) {
+        mtp_probe_at_ = mtp_windows_ + 16;
+        mtp_pick_ = mtp_pending_ = target;
+        mtp_pending_pos_ = pos;
+        return target;
+      }
+    }
+    const double ev0 = 1.0 / std::max(1.0, b.v1);
+    double best_ev = ev0;
+    int best = 0;
+    for (int d = 1; d <= have; ++d) {
+      const double ev = (1.0 + mtp_ea_[d]) / std::max(1.0, b.v1 + d * (b.dstep + b.vrow));
+      if (ev > best_ev) best_ev = ev, best = d;
+    }
+    if (best == 0) {  // (AR beats every draft depth: back off 12 windows, then probe again)
+      if (mtp_ar_set_ != mtp_windows_) mtp_ar_left_ = 12, mtp_ar_set_ = mtp_windows_;
+      return 0;
+    }
+    // hysteresis: a new depth must win by 1.5 % or the last one stays (no per-window thrashing)
+    if (mtp_pick_ >= 1 && mtp_pick_ <= have) {
+      const double ev_last = (1.0 + mtp_ea_[mtp_pick_]) /
+                             std::max(1.0, b.v1 + mtp_pick_ * (b.dstep + b.vrow));
+      if (best_ev < ev_last * 1.015) best = mtp_pick_;
+    }
+    mtp_pick_ = mtp_pending_ = best;
+    mtp_pending_pos_ = pos;
+    return best;
+  }
+  // The caller ran a pure-AR window the pick asked for: count it down (gufo's 16-token AR backoff).
+  void mtp_adaptive_ar_done() {
+    if (mtp_ar_left_ <= 0) return;
+    if (--mtp_ar_left_ == 0) {
+      mtp_ar_set_ = -1;
+      mtp_probe_after_ar_ = true;
+    }
+  }
+  // Feeds the window's cost and per-depth acceptance, from verify_done once accepted is known.
+  void mtp_ctl_observe(int accepted) {
+    if (!mtp_window_ || !mtp_verified_) return;
+    mtp_window_ = mtp_verified_ = false;
+    if (!mtp_ctl_on(1) || mtp_drafted_ <= 0 || mtp_vrows_ <= 0) return;
+    if (mtp_band_w_ < 0 || mtp_band_w_ >= kCtlBands) return;
+    MtpCtlBand& b = mtp_band_[mtp_band_w_];
+    if (!copy_used_ && !dfl_used_) {  // (a copy or DFlash window's timings pollute the MTP chain's cost)
+      b.dstep = b.steps ? 0.85 * b.dstep + 0.15 * (mtp_draft_ms_ / mtp_drafted_) : mtp_draft_ms_ / mtp_drafted_;
+      ++b.steps;
+    }
+    b.S0 = 0.9 * b.S0 + 1;
+    b.Sx = 0.9 * b.Sx + mtp_vrows_;
+    b.Sy = 0.9 * b.Sy + mtp_verify_ms_;
+    b.Sxx = 0.9 * b.Sxx + (double)mtp_vrows_ * mtp_vrows_;
+    b.Sxy = 0.9 * b.Sxy + mtp_vrows_ * mtp_verify_ms_;
+    {  // + fixed priors, so a run of one row count cannot make the slope singular
+      const double P0 = 3, Px = 6, Py = 2 * 252.74 + 301.39, Pxx = 18, Pxy = 2 * 252.74 + 4 * 301.39;
+      const double n = b.S0 + P0, sx = b.Sx + Px, sy = b.Sy + Py, sxx = b.Sxx + Pxx, sxy = b.Sxy + Pxy;
+      const double den = n * sxx - sx * sx;
+      if (den > 1e-9) {
+        const double slope = (n * sxy - sx * sy) / den, icpt = (sy - slope * sx) / n;
+        if (slope > 0 && slope < 200) b.vrow = slope, b.v1 = std::max(50.0, icpt + slope);
+      }
+    }
+    const int nd = std::min(mtp_drafted_, kMaxDrafts);
+    for (int d = 1; d <= nd; ++d) {  // (every depth up to what was drafted saw min(accepted, d): no independence assumed)
+      mtp_ea_[d] = 0.9 * mtp_ea_[d] + 0.1 * std::min(accepted, d);
+      ++mtp_en_[d];
+      if (accepted >= d) {  // (the chain reached this depth and it was accepted: the mask lifts)
+        mtp_cfail_[d] = 0;
+        mtp_mask_[d] = false;
+        mtp_have_ = std::max(mtp_have_, d);
+      } else if (d == accepted + 1) {  // (only the first rejection is observed; deeper drafts were never tested)
+        // gufo's failed-depth mask, priced: 3 rejections in a row and no token worth its cost -> cap below it
+        if (++mtp_cfail_[d] >= 3 && mtp_ctl_margin(d) < 0.20) mtp_mask_[d] = true;
+      }
+    }
+    mtp_censored_ = accepted == mtp_drafted_;
+    ++mtp_windows_;
+    ++mtp_hist_[std::clamp(mtp_pick_, 0, kMaxDrafts)];
+    if (const char* path = getenv("ARC_MTP_ADAPTIVE_CSV")) {  // (the audit trail: one row a window)
+      if (!mtp_csv_tried_) {
+        mtp_csv_tried_ = true;
+        mtp_csv_ = fopen(path, "w");
+        if (mtp_csv_)
+          fprintf(mtp_csv_, "window,band,pick,drafted,accepted,vrows,draft_ms,verify_ms,dstep,v1,vrow,"
+                            "e1,e2,e3,e4,e5,e6,e7\n");
+      }
+      if (mtp_csv_) {
+        fprintf(mtp_csv_, "%d,%d,%d,%d,%d,%d,%.3f,%.3f,%.3f,%.3f,%.3f", mtp_windows_, mtp_band_w_, mtp_pick_,
+                mtp_drafted_, accepted, mtp_vrows_, mtp_draft_ms_, mtp_verify_ms_, b.dstep, b.v1, b.vrow);
+        for (int d = 1; d <= kMaxDrafts; ++d) fprintf(mtp_csv_, ",%.4f", mtp_ea_[d]);
+        fprintf(mtp_csv_, "\n");
+        fflush(mtp_csv_);
+      }
+    }
+  }
+  void mtp_adaptive_report() {
+    if (!opt.mtp_adaptive || mtp_windows_ == 0) return;
+    zlog::eprintf("inferzero: MTP adaptive depth: %d windows, chosen depths", mtp_windows_);
+    for (int d = 0; d <= kMaxDrafts; ++d)
+      if (mtp_hist_[d]) zlog::eprintf(" d%d:%d", d, mtp_hist_[d]);
+    zlog::eprintf("; expected accepted drafts e =");
+    for (int d = 1; d <= std::min(mtp_have_ + 1, kMaxDrafts); ++d) zlog::eprintf(" %.2f", mtp_ea_[d]);
+    zlog::eprintf("; bands: dstep / v1 / vrow =");
+    for (int b = 0; b < kCtlBands; ++b)
+      if (mtp_band_[b].steps)
+        zlog::eprintf(" [%d] %.1f / %.0f / %.1f", b, mtp_band_[b].dstep, mtp_band_[b].v1, mtp_band_[b].vrow);
+    zlog::eprintf("\n");
+    if (mtp_csv_) fclose(mtp_csv_), mtp_csv_ = nullptr;
+  }
+
   // The MTP block's KV rows of the pending accepted drafts and of `tok`, as its own drafts would write them, when
   // another drafter (DFlash2, copy drafting) drafts this step: the block attends to every position once it drafts again
   // (without the rows: stale memory)
@@ -816,6 +1013,9 @@
   std::vector<int> mtp_draft(int tok, int max_drafts, const std::vector<int>* hist = nullptr) {
     busy_begin(1);
     copy_used_ = false;
+    const bool ctl = mtp_ctl_on(max_drafts);  // (P2: the MTP block path times itself for the depth controller)
+    if (ctl) mtp_window_ = mtp_verified_ = false;
+    const auto ctl_t0 = std::chrono::steady_clock::now();
     if (hist && copy_on()) {
       const int md = std::clamp(max_drafts, 1, std::min(this->max_drafts(), std::max(1, ctx - pos - 1)));
       std::vector<int> cd = copy_lookup(*hist, tok, md);
@@ -851,6 +1051,11 @@
     toks.push_back(tok);
     pend_toks_.clear();
     max_drafts = std::clamp(max_drafts, 1, std::clamp(opt.mtp_drafts, 1, kMaxDrafts));
+    if (ctl) {  // (P2: this window's depth: the caller's pending pick, or ask now)
+      const int pick = mtp_pending_ > 0 && mtp_pending_pos_ == pos ? mtp_pending_ : mtp_adaptive_pick(max_drafts);
+      mtp_pending_ = 0;
+      max_drafts = std::clamp(std::min(max_drafts, pick), 1, max_drafts);
+    }
     if (dfl_) max_drafts = std::min(max_drafts, mtp_block_drafts());  // (with DFlash2 the drafts setting is its 7)
     if (pos + 1 + max_drafts > ctx) max_drafts = std::max(1, ctx - pos - 1);
     std::vector<int> drafts;
@@ -870,6 +1075,11 @@
     }
     collect_profile();
     busy_end_draft((int)drafts.size(), false);
+    if (ctl) {  // (P2: the window's draft cost and depth, for verify_done's observation)
+      mtp_draft_ms_ = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - ctl_t0).count();
+      mtp_drafted_ = (int)drafts.size();
+      mtp_window_ = true;
+    }
     return drafts;
   }
   // Main-model pass over [tok, drafts...] at positions pos, pos+1, ... Returns the logits of every row (row i
@@ -877,6 +1087,9 @@
   // verify_done() can drop rejected drafts.
   const std::vector<float>& verify(int tok, const std::vector<int>& drafts) {
     busy_begin(2);
+    const bool ctl = mtp_ctl_on(1) && mtp_window_;  // (P2: time this pass for the depth controller)
+    const auto ctl_t0 = std::chrono::steady_clock::now();
+    const int ctl_band = mtp_ctl_band();
     const int T = 1 + (int)drafts.size();
     if (drafts.empty() || (int)drafts.size() > max_drafts()) throw std::runtime_error("verify: too many drafts");
     if (pos + T > ctx) throw std::runtime_error("context overflow");
@@ -901,6 +1114,12 @@
     if (pos > written_hi_) written_hi_ = pos;
     collect_profile();
     busy_end_verify();
+    if (ctl) {  // (P2: the window's verify cost and row count; verify_done feeds the observation)
+      mtp_verify_ms_ = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - ctl_t0).count();
+      mtp_vrows_ = T;
+      mtp_band_w_ = ctl_band;
+      mtp_verified_ = true;
+    }
     return spec_logits_host_;
   }
   // The first `accepted` drafts of the last verify() turned out right; the rest are dropped.
@@ -911,6 +1130,7 @@
     vrows_ = false;
     const int nd = (int)last_drafts_.size();
     accepted = std::clamp(accepted, 0, nd);
+    mtp_ctl_observe(accepted);  // (P2: this window's cost and acceptance, before the state changes)
     if (!gemma_mtp_)
       for (auto& L : layers_) {
         if (!hp.recurrent(L.il)) continue;

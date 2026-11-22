@@ -1,0 +1,8 @@
+loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 16.39 GiB | W8 just-in-time | chunk 4096 | ctx 80 | load 7400 ms
+prompt: 8 tokens | time to first token 555.1 ms (14.4 t/s)
+top-10 next token: 271(0.4781) 1358(0.0998) 3297(0.0390) 198(0.0296) 28763(0.0247) 4844(0.0211) 16743(0.0199) 7054(0.0123) 3437(0.0090) 561(0.0090)
+greedy: 271 2114 5607 366 369 264 21078 9485 14429 15487 27355 11767 421 47493 264 328 66125 1 2315 494 279 1287 11 45127 279 9376 5255 1083 1330 1146 64633 83581 440 5255 2599 1056 279 25212 321 799 440 5255 6826 1056 279 25212 2218 3282
+generation: 48 tokens in 6603.1 ms (7.27 t/s)
+weights read: 16732 MB per pass, 48.1 GB/s (55 % of this GPU's measured 87 GB/s) (drafter weights not counted)
+MTP: 51 drafts, 29 accepted (56.9 %), 2.53 tokens per main-model pass (19 passes)
+MTP time: drafting 1077.4 ms, verification 5457.6 ms (287.2 ms a pass), verify_done 33.4 ms

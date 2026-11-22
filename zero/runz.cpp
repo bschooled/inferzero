@@ -458,6 +458,8 @@ static int run_main(int argc, char** argv) {
             "  --mtp                 speculative decoding (MTP block / Gemma drafter)\n"
             "  --mtp-drafts N        drafts per step, 2..7 (default: 27B 7, on B-series cards 3; 35B-A3B 5; Qwen 4B and\n"
             "                        smaller, Flash Next 3; 9B 2; with --dflash 7); Gemma 4's drafter always drafts 3\n"
+            "  --mtp-adaptive        pick the MTP draft depth per window from measured acceptance and cost (1..7, or up to\n"
+            "                        --mtp-drafts when given), instead of the static --mtp-drafts (P2; ARC_MTP_ADAPTIVE=1 too)\n"
             "  --mtp-model F         the MTP head or drafter in a file of its own (Gemma 4 drafter; Qwen3.8 Flash Next's\n"
             "                        mtp-*.gguf head; for a dense Qwen3.5 / 3.8 fine-tune without an MTP block, the\n"
             "                        base model's .gguf, whose block must match it); default: an mtp-*.gguf next to the model\n"
@@ -599,9 +601,10 @@ static int run_main(int argc, char** argv) {
       else if (d == "dflash") eo.mtp_block = false;
       else if (d != "auto") { zlog::eprintf("--draft: auto, mtp or dflash\n"); return 1; }
     }
-    else if (a == "--mtp-drafts") eo.mtp_drafts = atoi(next());
+    else if (a == "--mtp-drafts") eo.mtp_drafts = atoi(next()), eo.mtp_drafts_given = true;
     else if (a == "--mtp-model") { eo.mtp_model = next(); eo.mtp = true; }  // (an MTP head / drafter file of its own)
     else if (a == "--mtp-min-p") eo.mtp_min_p = (float)atof(next());
+    else if (a == "--mtp-adaptive") eo.mtp_adaptive = true, eo.mtp = true;  // (P2: priced adaptive draft depth)
     else if (a == "--copy-draft") eo.copy_draft = true;  // (R1: drafts copied from the context where it repeats)
     else if (a == "--kl-ref") kl_ref = next();
     else if (a == "--slots-check") slots_check = true;
@@ -1560,7 +1563,17 @@ static int run_main(int argc, char** argv) {
         const auto c0 = std::chrono::steady_clock::now();
         hist.resize(toks.size());
         hist.insert(hist.end(), gen.begin(), gen.end() - 1);
-        const std::vector<int> drafts = eng.mtp_draft(tok, eng.opt.mtp_drafts, &hist);
+        // (P2: the adaptive controller's depth for this window; 0 = EV(0) won, a pure-AR window)
+        const int nd = eng.opt.mtp_adaptive ? eng.mtp_adaptive_pick(eng.opt.mtp_drafts) : eng.opt.mtp_drafts;
+        if (nd <= 0) {
+          const auto& l2 = eng.forward(&tok, 1);
+          if (dl) fwrite(l2.data(), sizeof(float), V, dl);
+          eng.mtp_adaptive_ar_done();
+          ++steps;
+          tok = (int)(std::max_element(l2.begin(), l2.end()) - l2.begin());
+          continue;
+        }
+        const std::vector<int> drafts = eng.mtp_draft(tok, nd, &hist);
         const bool copied = eng.last_draft_copy();
         const auto c1 = std::chrono::steady_clock::now();
         const auto& lv = eng.verify(tok, drafts);

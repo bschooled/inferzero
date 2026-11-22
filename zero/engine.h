@@ -99,6 +99,11 @@ struct EngineOptions {
   bool mtp = false;           // load the MTP (nextn) block for speculative decoding (mtp_draft / verify)
   int mtp_drafts = 0;         // drafts per step (1..7; later ones chained on the MTP block's own output); 0 = auto:
                               // 3 for wide dense Qwen models (27B: code 7.8 -> 9.5 tok/s, text +2.5 %), else 2
+  bool mtp_drafts_given = false;  // (--mtp-drafts N was given: with --mtp-adaptive it caps the chosen depth)
+  // P2 adaptive draft depth (2026-11-21, opt-in): the MTP block's draft depth is chosen every decode window
+  // from the measured acceptance per depth and the measured draft / verify cost (mtp_adaptive_pick,
+  // zero/engine_drafters.h; ARC_MTP_ADAPTIVE=1 sets it too). Default off: the static --mtp-drafts path, bit-identical.
+  bool mtp_adaptive = false;
   float mtp_min_p = 0.5f;     // draft a second token only if the MTP block gives the first this probability
   // copy drafting (QUEUE R1, 2026-11-21, opt-in): with mtp, a step whose last tokens appeared earlier in the context
   // drafts the tokens that followed them there instead of asking the drafter (mtp_draft's hist); verified as any drafts,
@@ -300,6 +305,7 @@ __kernel void rd_strip(__global const uint* p, __global uint* out, int per_item)
  private:
   void release_all() {
     busy_report();
+    mtp_adaptive_report();  // (P2: the depth distribution and the learned costs, when --mtp-adaptive ran)
     if (zrt::D().cl) clFinish(cl_.queue);  // (init may have failed before the runtime existed: nothing to wait for)
     // (a split model's pipelined sums, ARC_TP_PIPE: copies still queued after a failure read tp_h_ and host memory;
     //  they drain once the compute list has: every wait of that list comes after its signal)
@@ -361,7 +367,11 @@ __kernel void rd_strip(__global const uint* p, __global uint* out, int per_item)
       if (opt.mtp) zlog::eprintf("inferzero: --draft dflash without a DFlash2 drafter: the MTP block drafts\n");
       opt.mtp_block = true;
     }
-    if (opt.mtp_drafts <= 0) opt.mtp_drafts = !opt.dflash.empty() ? 7 : xe2_mtp_drafts(mtp_block_drafts());
+    // (P2 adaptive draft depth: the controller picks 1..7 per window, so the static setting only caps it; an
+    //  explicit --mtp-drafts N stays the cap, else the ceiling is Qwen's trained kMaxDrafts. ARC_MTP_ADAPTIVE=1 too)
+    if (!opt.mtp_adaptive && getenv("ARC_MTP_ADAPTIVE") && atoi(getenv("ARC_MTP_ADAPTIVE")) != 0) opt.mtp_adaptive = true;
+    if (opt.mtp_adaptive && opt.mtp) opt.mtp_drafts = opt.mtp_drafts_given ? std::clamp(opt.mtp_drafts, 1, 7) : 7;
+    else if (opt.mtp_drafts <= 0) opt.mtp_drafts = !opt.dflash.empty() ? 7 : xe2_mtp_drafts(mtp_block_drafts());
     auto t0 = std::chrono::steady_clock::now();
     plan_weights();
     stream_ = hp.moe_std && opt.stream_experts && !getenv("ARC_ZERO_NO_STREAM");
@@ -588,6 +598,11 @@ __kernel void rd_strip(__global const uint* p, __global uint* out, int per_item)
     pend_toks_.clear();
     last_drafts_.clear();  // (a verification pass never settled, a batch that threw: nothing left of them)
     vrows_ = dfl_used_ = spec_ = false;
+    mtp_window_ = false;  // (P2: no half window survives a reset)
+    mtp_verified_ = false;
+    mtp_pending_ = 0;
+    mtp_ar_left_ = 0;
+    mtp_ar_set_ = -1;
     batch_.clear();
     dfl_cap_lo_ = dfl_cap_base_ = dfl_cap_end_ = 0;
     nc_lo_ = nc_hi_ = -1;
@@ -956,6 +971,9 @@ __kernel void rd_strip(__global const uint* p, __global uint* out, int per_item)
     // (Gemma 4's drafter too, through the same calls, its code unchanged: an E4B first request after an update
     //  generated at 3.7 tok/s, its drafter and verification kernels compiling, the next ones at 26)
     if (has_mtp) {
+      // (P2: the warm-up accepts every draft of every row count: no evidence for the adaptive controller)
+      struct CtlWarm { bool& f; ~CtlWarm() { f = false; } } ctl_warm{mtp_ctl_suppress_};
+      mtp_ctl_suppress_ = true;
       for (int round = 0; round < (dfl_ ? 2 : 1); ++round) {
         for (int k = 1; k <= max_drafts() && pos + k + 2 < ctx; ++k) {
           dfl_ema_ = round == 0 ? 4.0 : 0.0;  // (round 0 with DFlash2: its drafts; round 1: the MTP block's)
