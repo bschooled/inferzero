@@ -528,6 +528,16 @@ __kernel void rd_strip(__global const uint* p, __global uint* out, int per_item)
                       p140_min(res), res ? "resident" : "just-in-time");
       });
     }
+    // (ARC_PROMPT_DPAS: what it does here, so a log says whether this GPU could take DPAS at all; M7-P5)
+    if (prompt_dpas_on() && !opt.dry) {
+      if (!cl_.xmx)
+        zlog::eprintf("inferzero: ARC_PROMPT_DPAS: this GPU's driver offers no DPAS (Xe-LPG has none): prompt GEMMs on DP4a\n");
+      else if (!xmx_ && !xmx_slow_)
+        zlog::eprintf("inferzero: ARC_PROMPT_DPAS: the XMX kernels differ from DP4a or do not build: prompt GEMMs on DP4a\n");
+      else
+        zlog::eprintf("inferzero: ARC_PROMPT_DPAS: prompt GEMMs of %d tokens and more on DPAS, shorter ones on DP4a\n",
+                      prompt_dpas_t());
+    }
     if (!opt.dry) x16_init();  // (the f16 XMX prompt GEMM: zero/xe2/engine_xe2.h)
     if (!opt.dry) xw_init();   // (the H8R GEMM with wider XMX tiles: the 140T preset and discrete cards' H8 (h8_auto_), or ARC_GEMM_XW=1: zero/xe2/engine_xw.h)
     if (!opt.dry && hp.ssm_nv > 0) gdnx_init();  // (the chunked DeltaNet on XMX, ARC_GDN_CHUNK=3: the same file)
@@ -1667,8 +1677,11 @@ __kernel void rd_strip(__global const uint* p, __global uint* out, int per_item)
     // (the 140T preset: XMX with 32 tokens, 2 column groups and 128 registers where it takes the GEMM, else the DP4a
     //  default: 16 tokens, 256 registers, one column group)
     const int cg = pt ? 2 : p140_ ? 1 : xe2_cg_for(w.N);
+    // (ARC_PROMPT_DPAS: DPAS (1) or DP4a (0) by this chunk's token count, -1 the engine's verdict as before;
+    //  prompt_dpas_for, zero/engine_setup.h)
+    const int xd = prompt_dpas_for(Mp);
     cl_kernel k = pt ? gemm_kernel(w.gemm_qtype, act32, 1, 2, 32, 1)
-                     : p140_ ? gemm_kernel(w.gemm_qtype, act32, 0, 1, 16, 0) : gemm_kernel(w.gemm_qtype, act32, -1, cg);
+                     : p140_ ? gemm_kernel(w.gemm_qtype, act32, 0, 1, 16, 0) : gemm_kernel(w.gemm_qtype, act32, xd, cg);
     int M = Mp, N = w.N, K = w.K;
     // Long reductions are split into ~17-superblock pieces (the activation slab of a token-row group then stays in
     // L3); later pieces accumulate into C. Token rows are swept together per weight slice (rgroup).

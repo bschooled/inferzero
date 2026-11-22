@@ -453,7 +453,10 @@
     if (xw_ && (cl_.sg8 || !pt) && xw_matmul(name, wq, hh, Mp, w.N, w.K, C, ldc, c_off, a, pack)) return;
     if (pack) throw std::logic_error(std::string("gemm ") + name + ": packed operands for a shape gemm_xw8 did not take");
     const int cg = pt ? 2 : h8_cg_for(w.N);
-    cl_kernel k = pt ? gemm_kernel(h8_qtype(), false, 1, 2, 32, 1) : gemm_kernel(h8_qtype(), false, -1, cg);
+    // (ARC_PROMPT_DPAS: wide chunks only, as in the plain prompt GEMM. The H8 XMX kernels are checked only where XMX is
+    //  on, so there the flag's verdict is left alone; zero/engine_setup.h prompt_dpas_for)
+    const int xd = xmx_ ? prompt_dpas_for(Mp) : -1;
+    cl_kernel k = pt ? gemm_kernel(h8_qtype(), false, 1, 2, 32, 1) : gemm_kernel(h8_qtype(), false, xd, cg);
     int M = Mp, N = w.N, K = w.K;
     static const int rg_env = getenv("ARC_GEMM_RG") ? std::max(1, atoi(getenv("ARC_GEMM_RG"))) : 4;
     static const int wgy_max = getenv("ARC_GEMM_WGY") ? atoi(getenv("ARC_GEMM_WGY")) : 8;

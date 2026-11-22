@@ -498,6 +498,33 @@
     static const int t = getenv("ARC_XMX_TRY") ? atoi(getenv("ARC_XMX_TRY")) : 0;
     return t == 2 ? " -DTP=8" : t == 3 ? " -DTP=8 -DDBG_NOBCAST" : " -DXMX -DTP=8";
   }
+  // ARC_PROMPT_DPAS (M7-P5, 2026-11-21; default off): the prompt GEMMs on DPAS only where a chunk's token tiles are
+  // wide, DP4a below. DPAS lost on an iGPU in the earlier test, but that test's tiles were decode-shaped; this asks the
+  // question per launch instead of once per process (xmx_check's verdict covers the whole prompt path). 1 = DPAS for
+  // tiles of ARC_PROMPT_DPAS_T tokens and more (default 256), DP4a below; unset / 0 = the engine's own verdict for
+  // every tile, the code path before this switch bit for bit.
+  static bool prompt_dpas_on() {
+    static const bool on = getenv("ARC_PROMPT_DPAS") ? atoi(getenv("ARC_PROMPT_DPAS")) != 0 : false;
+    return on;
+  }
+  static int prompt_dpas_t() {
+    static const int t = [] {
+      const int v = getenv("ARC_PROMPT_DPAS_T") ? atoi(getenv("ARC_PROMPT_DPAS_T")) : 256;
+      return v < 16 ? 16 : v > 16384 ? 16384 : v;  // (a tile is at least one sub-group's 16 rows)
+    }();
+    return t;
+  }
+  // The xmx argument of gemm_kernel for a prompt GEMM of `tokens` tokens: -1 (the engine's verdict, as before), 1
+  // (DPAS) or 0 (DP4a). DPAS needs the driver's matrix engine (Xe2 / Xe3 and Arrow Lake H; Xe-LPG, this laptop, has
+  // none) and kernels that passed their check against DP4a: xmx_, or xmx_slow_ (the results were right and only the
+  // speed check said no, which is what wide tiles retest).
+  int prompt_dpas_for(int tokens) const {
+    if (!prompt_dpas_on()) return -1;
+    // (ARC_XMX_TRY: the check's DP4a stand-in for DPAS (tests): the flag then routes the same way on a GPU without one)
+    if (!cl_.xmx && !getenv("ARC_XMX_TRY")) return 0;
+    if (!(xmx_ || xmx_slow_)) return 0;
+    return tokens >= prompt_dpas_t() ? 1 : 0;
+  }
   // (xe2_gemm_grf / moe_grf / cg: zero/xe2/engine_xe2.h, the defaults on GPUs without XMX)
   // tm: tokens per sub-group (0: gemm_tm()); g128: 1 the default register file, 0 256 registers, -1 xe2_gemm_grf()
   // (the 140T preset, zero/xe2/engine_xe2.h p140_, picks both per GEMM)
