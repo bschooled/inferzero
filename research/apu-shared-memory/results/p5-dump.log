@@ -1,0 +1,46 @@
+# M7b-P5 — the four dump runs' logs (prompt 443 tokens, --n 8, one model load each)
+# the flag lines prove what each run did; every run's top-10 and greedy tokens are the same
+
+=== base 2026-11-22T10:27:23-08:00
+=== Rusticl warning: Patched Mesa libclc not detected. Upstream libclc may contain known bugs or breaking changes and isn't guaranteed to work reliably. Please visit https://gitlab.freedesktop.org/karolherbst/mesa-libclc for more information. ===
+loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 15.63 GiB | W8 just-in-time | chunk 4096 | ctx 480 | load 6249 ms
+prompt: 443 tokens | time to first token 7321.0 ms (60.5 t/s)
+top-10 next token: 198(0.7964) 271(0.1501) 1358(0.0342) 248046(0.0029) 2129(0.0023) 1(0.0015) 13(0.0008) 987(0.0005) 11(0.0004) 695(0.0004)
+greedy: 198 22 13 44614 35464 12 15 22
+generation: 8 tokens in 1959.8 ms (4.08 t/s)
+weights read: 13744 MB per pass, 56.1 GB/s (64 % of this GPU's measured 88 GB/s) (drafter weights not counted)
+    exit 0
+=== off 2026-11-22T10:27:57-08:00
+=== Rusticl warning: Patched Mesa libclc not detected. Upstream libclc may contain known bugs or breaking changes and isn't guaranteed to work reliably. Please visit https://gitlab.freedesktop.org/karolherbst/mesa-libclc for more information. ===
+loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 15.63 GiB | W8 just-in-time | chunk 4096 | ctx 480 | load 6679 ms
+prompt: 443 tokens | time to first token 7550.2 ms (58.7 t/s)
+top-10 next token: 198(0.7964) 271(0.1501) 1358(0.0342) 248046(0.0029) 2129(0.0023) 1(0.0015) 13(0.0008) 987(0.0005) 11(0.0004) 695(0.0004)
+greedy: 198 22 13 44614 35464 12 15 22
+generation: 8 tokens in 1960.5 ms (4.08 t/s)
+weights read: 13744 MB per pass, 56.1 GB/s (64 % of this GPU's measured 87 GB/s) (drafter weights not counted)
+    exit 0
+=== on 2026-11-22T10:28:31-08:00
+=== Rusticl warning: Patched Mesa libclc not detected. Upstream libclc may contain known bugs or breaking changes and isn't guaranteed to work reliably. Please visit https://gitlab.freedesktop.org/karolherbst/mesa-libclc for more information. ===
+inferzero: ARC_PROMPT_DPAS: this GPU's driver offers no DPAS (Xe-LPG has none): prompt GEMMs on DP4a
+loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 15.63 GiB | W8 just-in-time | chunk 4096 | ctx 480 | load 6702 ms
+prompt: 443 tokens | time to first token 15017.1 ms (29.5 t/s)
+top-10 next token: 198(0.7964) 271(0.1501) 1358(0.0342) 248046(0.0029) 2129(0.0023) 1(0.0015) 13(0.0008) 987(0.0005) 11(0.0004) 695(0.0004)
+greedy: 198 22 13 44614 35464 12 15 22
+generation: 8 tokens in 2066.6 ms (3.87 t/s)
+weights read: 13744 MB per pass, 53.2 GB/s (61 % of this GPU's measured 87 GB/s) (drafter weights not counted)
+    exit 0
+=== cproxy 2026-11-22T10:29:14-08:00
+=== Rusticl warning: Patched Mesa libclc not detected. Upstream libclc may contain known bugs or breaking changes and isn't guaranteed to work reliably. Please visit https://gitlab.freedesktop.org/karolherbst/mesa-libclc for more information. ===
+inferzero: XMX on for the prompt GEMMs (results checked against DP4a)
+inferzero: ARC_PROMPT_DPAS: this GPU's driver offers no DPAS (Xe-LPG has none): prompt GEMMs on DP4a
+loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 15.63 GiB | W8 just-in-time | chunk 4096 | ctx 480 | load 6433 ms
+prompt: 443 tokens | time to first token 11606.0 ms (38.2 t/s)
+top-10 next token: 198(0.7964) 271(0.1501) 1358(0.0342) 248046(0.0029) 2129(0.0023) 1(0.0015) 13(0.0008) 987(0.0005) 11(0.0004) 695(0.0004)
+greedy: 198 22 13 44614 35464 12 15 22
+generation: 8 tokens in 2022.6 ms (3.96 t/s)
+weights read: 13744 MB per pass, 54.4 GB/s (62 % of this GPU's measured 88 GB/s) (drafter weights not counted)
+    exit 0
+c1f52324fe6bc148d1530fd412cfb0f4f42accbd46f0e646469117a4249123a6  /tmp/lg-base.bin
+c1f52324fe6bc148d1530fd412cfb0f4f42accbd46f0e646469117a4249123a6  /tmp/lg-off.bin
+c1f52324fe6bc148d1530fd412cfb0f4f42accbd46f0e646469117a4249123a6  /tmp/lg-on.bin
+c1f52324fe6bc148d1530fd412cfb0f4f42accbd46f0e646469117a4249123a6  /tmp/lg-c.bin

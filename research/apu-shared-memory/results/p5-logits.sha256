@@ -1,0 +1,22 @@
+# M7b-P5 — the bit-identical check: branch base, flag off, flag on, and the ARC_XMX_TRY=2 DP4a stand-in.
+#
+# node bschooley@192.168.50.48, tree ~/inferzero-p5 (9551dbb) and /tmp/p5base (worktree at dd2e6a9 = the branch base)
+# model Qwen3.8-40B-Ultimate-Heretic-Uncn-Turbo-Brilli-50x-AGI-NEO-MTP-IQ2_M.gguf
+# prompt results/p5-prompt.txt (443 tokens), --n 8, --dump-logits FILE (17 rows x 248320 f32 = 16885760 bytes)
+#
+#   1  /tmp/p5base/bin/runz            (dd2e6a9, no ARC_PROMPT_DPAS in the source at all)
+#   2  ./bin/runz                      (9551dbb, flag unset: the engine's own verdict, the code path before it)
+#   3  ./bin/runz ARC_PROMPT_DPAS=1    (DPAS for tiles >= 256; the log says this GPU has none)
+#   4  ./bin/runz ARC_PROMPT_DPAS=1 ARC_XMX_TRY=2  (the DPAS kernel's shape, 8 tokens a step, on DP4a)
+#
+c1f52324fe6bc148d1530fd412cfb0f4f42accbd46f0e646469117a4249123a6  lg-base.bin    # 1 branch base dd2e6a9
+c1f52324fe6bc148d1530fd412cfb0f4f42accbd46f0e646469117a4249123a6  lg-off.bin     # 2 flag off
+c1f52324fe6bc148d1530fd412cfb0f4f42accbd46f0e646469117a4249123a6  lg-on.bin      # 3 flag on
+c1f52324fe6bc148d1530fd412cfb0f4f42accbd46f0e646469117a4249123a6  lg-c.bin       # 4 stand-in
+#
+# All four are the same file: the switch off is the code path before it, and on this GPU (Xe-LPG, no DPAS) the
+# switch's routing is a no-op; the stand-in kernel is bit-identical to DP4a, which is what makes its speed a
+# measurement of the tile shape alone.
+#
+# The crashed child's own three dumps (its prompt, 444 tokens) agree the same way, sha256 ae831fcf...c040a:
+#   logits-main.bin (base), logits-off.bin, logits-on.bin

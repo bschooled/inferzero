@@ -1,0 +1,8 @@
+# M7b-P5 — ARC_XMX_TRY=1 (the real -DXMX build) on this node: the kernel does not compile
+# runz ... --bench-pp 256, 2026-11-21 22:09 (the crashed child's run; kept as the proof that there is no DPAS here)
+=== Rusticl warning: Patched Mesa libclc not detected. Upstream libclc may contain known bugs or breaking changes and isn't guaranteed to work reliably. Please visit https://gitlab.freedesktop.org/karolherbst/mesa-libclc for more information. ===
+inferzero: XMX kernels do not build here (kernel build failed: 2:219:29: error: use of undeclared identifier 'intel_sub_group_i8_i8_matrix_mad_k32'; did you mean 'intel_sub_group_e2m1_e2m1_matrix_mad_k64'?
+  219 |             const int8 r0 = x8_mad(al, lo[h], (in): DP4a
+loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 15.63 GiB | W8 just-in-time | chunk 4096 | ctx 464 | load 11150 ms
+Level Zero error 0x70000001 (device lost: the GPU was reset, by a driver timeout or a fault; the process must restart) at zero/clrt.h:346: zeCommandListHostSynchronize(d.cl, UINT64_MAX)
+  GPU memory: allocated by the engine 15.63 GiB; RAM free 12.65 GiB
