@@ -1,0 +1,12 @@
+# speedbench config=Q4_K_S-raw date=2026-11-21T17:25:35-08:00
+# model=/home/bschooley/models/Qwen3.8-40B-Ultimate-Heretic-Uncn-Turbo-Brilli-50x-AGI-NEO-MTP-Q4_K_S.gguf
+# command=/home/bschooley/inferzero-p1/bin/serverz -m /home/bschooley/models/Qwen3.8-40B-Ultimate-Heretic-Uncn-Turbo-Brilli-50x-AGI-NEO-MTP-Q4_K_S.gguf --slots 1 --ctx 8192 --host 127.0.0.1 --port 8090 --no-prefix-cache --session-cache-gb 0
+# mode=two-phase full_prompts=prose,structured (repeats=1 cooldown=30s max_tokens=150) screen_other (repeats=0 cooldown=30s max_tokens=150)
+2026-11-21 17:25:35.412 I inferzero built from source (Nov 21 2026)
+2026-11-21 17:25:35.413 I system: CachyOS, kernel 7.3.5-2-cachyos, Intel(R) Core(TM) Ultra 7 155H, 22 logical processors, RAM 30.7 GiB (29.3 free)
+2026-11-21 17:25:35.687 I GPU: Intel(R) Arc(TM) Graphics, driver 26.40.40196, 128 EUs, 2250 MHz, 28.4 GiB (shared with the CPU), XMX no, 8- and 16-lane sub-groups
+2026-11-21 17:26:00.611 I loaded in 24.7 s | 96 layers | ctx 8192 | chunk 4096 | GPU 23.24 GiB | weights W8 just-in-time
+2026-11-21 17:26:00.611 I model: qwen35, 96 layers, embedding 5120, heads 24 / kv 4, head 256, ffn 17408, vocab 248320, trained ctx 262144, file 21.16 GiB, Q4_K_S
+2026-11-21 17:26:29.076 I serving /home/bschooley/models/Qwen3.8-40B-Ultimate-Heretic-Uncn-Turbo-Brilli-50x-AGI-NEO-MTP-Q4_K_S.gguf as "Qwen3.8-40B-Ultimate-Heretic-Uncn-Turbo-Brilli-50x-AGI-NEO-MTP-Q4_K_S"
+2026-11-21 17:26:29.080 I listening on http://127.0.0.1:8090  (OpenAI API at /v1, web UI at /)
+

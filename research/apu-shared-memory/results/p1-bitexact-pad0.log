@@ -1,0 +1,9 @@
+=== Rusticl warning: Patched Mesa libclc not detected. Upstream libclc may contain known bugs or breaking changes and isn't guaranteed to work reliably. Please visit https://gitlab.freedesktop.org/karolherbst/mesa-libclc for more information. ===
+loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 16.86 GiB | W8 just-in-time | chunk 4096 | ctx 8192 | load 9288 ms
+prompt: 85 tokens | time to first token 2766.7 ms (30.7 t/s)
+top-10 next token: 760(0.8837) 1919(0.1135) 40(0.0023) 9764(0.0001) 24342(0.0001) 2381(0.0000) 36948(0.0000) 8160(0.0000) 6820(0.0000) 4272(0.0000)
+greedy: 760 1156 369 9859 364 264 11346 10597 8627 883 4475 17120 14931 494 1559 63164
+generation: 16 tokens in 2120.3 ms (7.55 t/s)
+weights read: 16712 MB per pass, 47.3 GB/s (54 % of this GPU's measured 88 GB/s) (drafter weights not counted)
+MTP: 16 drafts, 10 accepted (62.5 %), 2.67 tokens per main-model pass (6 passes)
+MTP time: drafting 345.1 ms, verification 1752.8 ms (292.1 ms a pass), verify_done 10.5 ms
