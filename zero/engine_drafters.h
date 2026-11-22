@@ -981,16 +981,27 @@
   // A pass over the context from its end per n (~0.1 ms each at 100K tokens); nothing found: empty
   bool copy_on() const {
     static const bool e = getenv("ARC_COPY_DRAFT") && atoi(getenv("ARC_COPY_DRAFT")) != 0;
-    return opt.copy_draft || e;
+    return opt.copy_draft || opt.mtp_copy_union || e;
   }
-  static std::vector<int> copy_lookup(const std::vector<int>& h, int tok, int max_drafts) {
+  // M5-P3 union tunables: the shortest key a copy proposal may rest on, and the most proposals a window starts with
+  static int copy_union_min() {
+    static const int n = getenv("ARC_COPY_UNION_MIN") ? std::clamp(atoi(getenv("ARC_COPY_UNION_MIN")), 1, 16) : 3;
+    return n;
+  }
+  static int copy_union_max() {
+    static const int n = getenv("ARC_COPY_UNION_MAX") ? std::clamp(atoi(getenv("ARC_COPY_UNION_MAX")), 1, 16) : 4;
+    return n;
+  }
+  // nmin_override > 0: the shortest key to try (the union's ARC_COPY_UNION_MIN), else ARC_COPY_MIN
+  static std::vector<int> copy_lookup(const std::vector<int>& h, int tok, int max_drafts, int nmin_override = 0) {
     // (the 4B, 256 tokens, MTP 42.0 tok/s on a code edit, 29.4 on a summary: longest first from 8 down to 4 58.5 /
     //  30.2, from 4 to 2 56.8 / 28.7 (the summary's 2-token matches 27 % right); 3 to 2 51.6 / 28.1)
     static const int ng = getenv("ARC_COPY_NGRAM") ? std::clamp(atoi(getenv("ARC_COPY_NGRAM")), 1, 16) : 8;
     static const int nmin = getenv("ARC_COPY_MIN") ? std::clamp(atoi(getenv("ARC_COPY_MIN")), 1, ng) : std::min(ng, 4);
+    const int lo = nmin_override > 0 ? std::clamp(nmin_override, 1, ng) : nmin;
     const int L = (int)h.size() + 1;  // (s[L - 1] = tok)
     auto s = [&](int i) { return i == L - 1 ? tok : h[i]; };
-    for (int n = std::min(ng, L - 1); n >= nmin; --n) {
+    for (int n = std::min(ng, L - 1); n >= lo; --n) {
       // j: the last token of an earlier match (j < L - 1), the drafts s[j + 1 ..]
       for (int j = L - 2; j >= n - 1; --j) {
         int k = 0;
@@ -1004,7 +1015,17 @@
     return {};
   }
   bool copy_used_ = false;
+  int copy_n_ = 0;  // (the leading drafts of the last mtp_draft that came from the copy lookup: M5-P3 union)
   bool last_draft_copy() const { return copy_used_; }  // the drafts of the last mtp_draft were copied (R1)
+  int last_draft_copy_n() const { return copy_n_; }
+  // (M5-P3 measurement: per-engine counters, printed by copy_report; cheap, a few ints a drafted window)
+  int copy_win_ = 0, copy_prop_win_ = 0, copy_prop_tok_ = 0, copy_union_win_ = 0;
+  void copy_report() {
+    if (!copy_win_) return;
+    zlog::eprintf("inferzero: copy drafting: %d of %d drafted windows proposed (%.1f %%), %d tokens%s\n", copy_prop_win_,
+                  copy_win_, 100.0 * copy_prop_win_ / copy_win_, copy_prop_tok_,
+                  opt.mtp_copy_union ? (", " + std::to_string(copy_union_win_) + " in union windows").c_str() : "");
+  }
   // `tok` is the next token (sampled, not yet processed; it goes to position pos). Returns up to `max_drafts` greedy
   // drafts of the MTP block for the tokens after it: the second one is chained on the block's own output and only
   // made when the first has probability >= opt.mtp_min_p.
@@ -1013,18 +1034,29 @@
   std::vector<int> mtp_draft(int tok, int max_drafts, const std::vector<int>* hist = nullptr) {
     busy_begin(1);
     copy_used_ = false;
+    copy_n_ = 0;
     const bool ctl = mtp_ctl_on(max_drafts);  // (P2: the MTP block path times itself for the depth controller)
     if (ctl) mtp_window_ = mtp_verified_ = false;
     const auto ctl_t0 = std::chrono::steady_clock::now();
+    // M5-P3: in union mode the copy proposals open the same window the MTP drafts fill (MTP block path only)
+    const bool union_on = opt.mtp_copy_union && !dfl_ && !gemma_mtp_;
+    std::vector<int> copy_drafts;
     if (hist && copy_on()) {
       const int md = std::clamp(max_drafts, 1, std::min(this->max_drafts(), std::max(1, ctx - pos - 1)));
-      std::vector<int> cd = copy_lookup(*hist, tok, md);
-      if (!cd.empty()) {
+      ++copy_win_;
+      copy_drafts = copy_lookup(*hist, tok, union_on ? std::min(md, copy_union_max()) : md,
+                                union_on ? copy_union_min() : 0);
+      if (!copy_drafts.empty()) {
+        ++copy_prop_win_;
+        copy_prop_tok_ += (int)copy_drafts.size();
+      }
+      if (!copy_drafts.empty() && !union_on) {
         dfl_used_ = false;
         copy_used_ = true;
+        copy_n_ = (int)copy_drafts.size();
         if (mtp_block_) mtp_sync_rows(tok);  // (the block's KV rows of the pending tokens and `tok`, as its drafts would)
-        busy_end_draft((int)cd.size(), true);
-        return cd;
+        busy_end_draft(copy_n_, true);
+        return copy_drafts;
       }
     }
     dfl_used_ = dfl_ && (!mtp_block_ || dfl_pick());
@@ -1058,23 +1090,37 @@
     }
     if (dfl_) max_drafts = std::min(max_drafts, mtp_block_drafts());  // (with DFlash2 the drafts setting is its 7)
     if (pos + 1 + max_drafts > ctx) max_drafts = std::max(1, ctx - pos - 1);
+    // M5-P3 union: the copy proposals take the first slots of the window; the MTP chain fills what is left of it
+    if ((int)copy_drafts.size() > max_drafts) copy_drafts.resize(max_drafts);
+    const int ncopy = (int)copy_drafts.size();
+    max_drafts -= ncopy;
     std::vector<int> drafts;
-    mtp_rows(toks.data(), hfin_, np + 1, pos - np, true, max_drafts > 1 ? mtp_h_ : nullptr);
-    // (ARC_MTP_VOCAB: the reduced head's N logits, row i the token draft_ids_[i])
-    const size_t nl = draft_head_on() ? (size_t)draft_head_.N : (size_t)hp.n_vocab;
-    for (int k = 0;; ++k) {
-      CL_CHECK(clEnqueueReadBuffer(cl_.queue, logits_, CL_TRUE, 0, nl * 4, mtp_logits_host_.data(), 0, nullptr, nullptr));
-      const auto first = mtp_logits_host_.begin(), last = first + nl;
-      const auto mx = std::max_element(first, last);
-      const int d = draft_head_on() ? draft_ids_[(size_t)(mx - first)] : (int)(mx - first);
-      drafts.push_back(d);
-      if ((int)drafts.size() >= max_drafts) break;
-      const double z = softmax_den(&*first, nl, *mx);
-      if (1.0 / z < opt.mtp_min_p) break;  // not confident: verify one draft only
-      mtp_rows(&d, mtp_h_, 1, pos + 1 + k, true, mtp_h_);
+    if (max_drafts > 0) {
+      mtp_rows(toks.data(), hfin_, np + 1, pos - np, true, max_drafts > 1 ? mtp_h_ : nullptr);
+      // (ARC_MTP_VOCAB: the reduced head's N logits, row i the token draft_ids_[i])
+      const size_t nl = draft_head_on() ? (size_t)draft_head_.N : (size_t)hp.n_vocab;
+      for (int k = 0;; ++k) {
+        CL_CHECK(clEnqueueReadBuffer(cl_.queue, logits_, CL_TRUE, 0, nl * 4, mtp_logits_host_.data(), 0, nullptr, nullptr));
+        const auto first = mtp_logits_host_.begin(), last = first + nl;
+        const auto mx = std::max_element(first, last);
+        const int d = draft_head_on() ? draft_ids_[(size_t)(mx - first)] : (int)(mx - first);
+        drafts.push_back(d);
+        if ((int)drafts.size() >= max_drafts) break;
+        const double z = softmax_den(&*first, nl, *mx);
+        if (1.0 / z < opt.mtp_min_p) break;  // not confident: verify one draft only
+        mtp_rows(&d, mtp_h_, 1, pos + 1 + k, true, mtp_h_);
+      }
+    } else {  // (only copy proposals: the block's rows of the pending tokens and `tok`, without logits)
+      mtp_rows(toks.data(), hfin_, np + 1, pos - np, false);
+    }
+    if (ncopy) {
+      drafts.insert(drafts.begin(), copy_drafts.begin(), copy_drafts.end());
+      copy_used_ = true;
+      copy_n_ = ncopy;
+      ++copy_union_win_;
     }
     collect_profile();
-    busy_end_draft((int)drafts.size(), false);
+    busy_end_draft((int)drafts.size(), ncopy > 0);
     if (ctl) {  // (P2: the window's draft cost and depth, for verify_done's observation)
       mtp_draft_ms_ = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - ctl_t0).count();
       mtp_drafted_ = (int)drafts.size();

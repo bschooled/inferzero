@@ -668,6 +668,8 @@
     int n_drafts = 0, n_accepted = 0;
     // (per drafter for the log: [0] the MTP block / Gemma drafter, [1] DFlash2; steps, drafts, accepted)
     int dr_steps[2] = {0, 0}, dr_drafts[2] = {0, 0}, dr_acc[2] = {0, 0}, dr_cur = 0;
+    // (M5-P3: windows whose drafts began with copy proposals, the proposals, and the ones taken)
+    int n_copy_win = 0, n_copy_prop = 0, n_copy_acc = 0, cur_copy_n = 0;
     size_t call_from = std::string::npos;  // where the open tool call's text starts (after <|tool_call>)
     int n_tool_tok = 0, n_tool_fixed = 0;   // tokens drawn inside tool calls; of them, a refused first choice
     int n_batched = 0;  // (--slots: steps run in one pass with other requests')
@@ -759,6 +761,7 @@
       bool draft_ok = false;  // t is an accepted draft: already processed by the model
       if (!drafts.empty()) {
         if (acc < drafts.size() && t == drafts[acc]) {
+          if ((int)acc < cur_copy_n) ++n_copy_acc;  // (this accepted draft was a copy proposal)
           draft_ok = true;
           ++acc;
           ++n_accepted;
@@ -839,6 +842,8 @@
         dr_cur = st.dflash ? 1 : 0;
         ++dr_steps[dr_cur];
         dr_drafts[dr_cur] += (int)drafts.size();
+        cur_copy_n = st.copy_n;  // (M5-P3: how many of these drafts are copy proposals)
+        if (cur_copy_n) ++n_copy_win, n_copy_prop += cur_copy_n;
       } else {
         logits = std::move(st.rows);
       }
@@ -904,6 +909,9 @@
             P.size(), start, prompt_ms / 1000, (P.size() - start) / std::max(prompt_ms, 1e-3) * 1000, gen.size(), gen_ms / 1000,
             gen.size() / std::max(gen_ms, 1e-3) * 1000, finish.c_str());
     if (n_drafts && !dr_steps[1]) zlog::eprintf(" | MTP %d/%d drafts accepted", n_accepted, n_drafts);
+    if (n_copy_win)  // (M5-P3: how often the copy lookup proposed, and how many proposals the model took)
+      zlog::eprintf(" | copy %d of %d windows, %d/%d proposals accepted", n_copy_win, dr_steps[0] + dr_steps[1], n_copy_acc,
+                    n_copy_prop);
     if (dr_steps[1])  // (DFlash2 drafted at least once: both drafters, each with its steps and accepted drafts)
       zlog::eprintf(" | DFlash2 %d steps, %d/%d drafts accepted | MTP %d steps, %d/%d", dr_steps[1], dr_acc[1],
               dr_drafts[1], dr_steps[0], dr_acc[0], dr_drafts[0]);

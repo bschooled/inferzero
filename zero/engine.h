@@ -109,6 +109,10 @@ struct EngineOptions {
   // drafts the tokens that followed them there instead of asking the drafter (mtp_draft's hist); verified as any drafts,
   // so the output stays the same. ARC_COPY_DRAFT=1 sets it too
   bool copy_draft = false;
+  // M5-P3 union mode (2026-11-21, opt-in): with copy drafting on the MTP block path, one verify window carries the
+  // copy proposals first (up to ARC_COPY_UNION_MAX, default 4; keys of ARC_COPY_UNION_MIN tokens, default 3) and then
+  // MTP drafts up to --mtp-drafts. Verification is unchanged (drafts are proposals). Default off = the paths above.
+  bool mtp_copy_union = false;
   std::string mtp_model;      // Gemma 4: assistant drafter GGUF (empty: an mtp-*.gguf next to the model, if any)
   // (a mtp_model that is not this model's head or drafter: false (runz) an error, true (the server, which may switch to
   //  another model) a line saying so, and the head or drafter next to the model as without it. Audit 2026-11-17)
@@ -306,6 +310,7 @@ __kernel void rd_strip(__global const uint* p, __global uint* out, int per_item)
   void release_all() {
     busy_report();
     mtp_adaptive_report();  // (P2: the depth distribution and the learned costs, when --mtp-adaptive ran)
+    copy_report();          // (M5-P3: copy-proposal rate per drafted window, when copy drafting was on)
     if (zrt::D().cl) clFinish(cl_.queue);  // (init may have failed before the runtime existed: nothing to wait for)
     // (a split model's pipelined sums, ARC_TP_PIPE: copies still queued after a failure read tp_h_ and host memory;
     //  they drain once the compute list has: every wait of that list comes after its signal)
