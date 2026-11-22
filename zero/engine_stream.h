@@ -288,7 +288,7 @@
         tu.nelements() == (uint64_t)Fs * E && !(w8_resident && !hp.moe)) {
       // router + shared-expert gate + up rows in one Q8_0 buffer: single tokens run one GEMV over all of them
       // (Layer::rgu); the three matrices are sub-buffers of it (stored once; their offsets are 512-byte aligned)
-      const size_t rowb = (size_t)E / 32 * 34, sbr = (size_t)E / 256 * raw_padded_sb_bytes(GGML_Q8_0);
+      const size_t rowb = (size_t)E / 32 * 34, sbr = (size_t)E / 256 * raw_padded_sb_bytes(GGML_Q8_0) + (size_t)row_pad_bytes();
       std::vector<uint8_t> cat((size_t)(NRP + 2 * Fs) * rowb, 0);
       memcpy(cat.data(), q8.data(), q8.size());
       memcpy(cat.data() + (size_t)NRP * rowb, tg.data, tg.nbytes);
@@ -297,7 +297,7 @@
       L.rgu.N = NRP + 2 * Fs;
       L.rgu.K = E;
       L.rgu.role = kRoles - 1;
-      L.rgu.raw = upload_padded(GGML_Q8_0, cat.data(), cat.size());
+      L.rgu.raw = upload_padded(GGML_Q8_0, cat.data(), cat.size(), false, nullptr, L.rgu.N);
       has_rgu_ = true;
       auto view = [&](int row0, int N, int role) {
         GpuWeight w;

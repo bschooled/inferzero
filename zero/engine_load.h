@@ -93,6 +93,13 @@
     static const bool on = getenv("ARC_IQ3S_TILE") && atoi(getenv("ARC_IQ3S_TILE")) != 0;
     return on;
   }
+  static int row_pad_bytes() {
+    static const int p = [] {
+      const int v = getenv("ARC_PAD_ROWS") ? atoi(getenv("ARC_PAD_ROWS")) : 0;
+      return v > 0 ? (v + 15) / 16 * 16 : 0;
+    }();
+    return p;
+  }
   // (one pair of padded IQ3_S superblocks, in place: superblock h's 32-block b is lane L = 8 h + b)
   static void iq3s_tile_pair(uint8_t* pr) {
     uint8_t in[224], o[224] = {};
@@ -111,11 +118,15 @@
     }
     memcpy(pr, o, 224);
   }
-  cl_mem upload_padded(uint32_t type, const uint8_t* data, size_t nbytes, bool tile_ok = false, bool* tiled = nullptr) {
+  cl_mem upload_padded(uint32_t type, const uint8_t* data, size_t nbytes, bool tile_ok = false, bool* tiled = nullptr,
+                       int nrows = 0) {
     const size_t bb = gguf_sb_bytes(type), bp = raw_padded_sb_bytes(type), nsb = nbytes / bb;
     const bool tile = tile_ok && type == GGML_IQ3_S && bp == 112 && nsb % 2 == 0 && iq3t_env();
     if (tiled) *tiled = tile;
-    const size_t total = nsb * bp + kRawSlack;
+    const size_t rpad = (nrows > 0 && nsb % (size_t)nrows == 0) ? (size_t)row_pad_bytes() : 0;
+    const size_t sbr = rpad ? (nsb / (size_t)nrows) : 0;
+    const size_t row_stride = sbr * bp + rpad;
+    const size_t total = (rpad ? (size_t)nrows * row_stride : nsb * bp) + kRawSlack;
     // (in host memory while plan_tight's share of the weights lasts: the first matrices loaded; the same bytes and
     //  kernels, so the logits are bit-identical)
     const bool host = host_left_ >= total;
@@ -145,20 +156,37 @@
       dst = (uint8_t*)clEnqueueMapBuffer(cl_.queue, m, CL_TRUE, CL_MAP_WRITE, 0, total, 0, nullptr, nullptr, &err);
       CL_CHECK(err);
     }
-    const int64_t chunks = (int64_t)((nsb + 4095) / 4096);
+    if (rpad) {
 #pragma omp parallel for schedule(static)
-    for (int64_t ch = 0; ch < chunks; ++ch) {
-      const size_t s0 = (size_t)ch * 4096, s1 = std::min(nsb, s0 + 4096);
-      if (bb == bp && !gpu_regrouped(type)) {
-        memcpy(dst + s0 * bp, data + s0 * bb, (s1 - s0) * bb);
-      } else {
-        for (size_t i = s0; i < s1; ++i) gpu_raw_sb(type, data + i * bb, dst + i * bp);
+      for (int r = 0; r < nrows; ++r) {
+        const uint8_t* sr = data + (size_t)r * sbr * bb;
+        uint8_t* dr = dst + (size_t)r * row_stride;
+        if (bb == bp && !gpu_regrouped(type)) {
+          memcpy(dr, sr, sbr * bb);
+        } else {
+          for (size_t s = 0; s < sbr; ++s) gpu_raw_sb(type, sr + s * bb, dr + s * bp);
+        }
+        if (tile)
+          for (size_t s = 0; s + 1 < sbr; s += 2) iq3s_tile_pair(dr + s * bp);
+        memset(dr + sbr * bp, 0, rpad);
       }
-      // (chunks of 4096 superblocks: the pairs stay inside one)
-      if (tile)
-        for (size_t i = s0; i + 1 < s1; i += 2) iq3s_tile_pair(dst + i * bp);
+      memset(dst + (size_t)nrows * row_stride, 0, kRawSlack);
+    } else {
+      const int64_t chunks = (int64_t)((nsb + 4095) / 4096);
+#pragma omp parallel for schedule(static)
+      for (int64_t ch = 0; ch < chunks; ++ch) {
+        const size_t s0 = (size_t)ch * 4096, s1 = std::min(nsb, s0 + 4096);
+        if (bb == bp && !gpu_regrouped(type)) {
+          memcpy(dst + s0 * bp, data + s0 * bb, (s1 - s0) * bb);
+        } else {
+          for (size_t i = s0; i < s1; ++i) gpu_raw_sb(type, data + i * bb, dst + i * bp);
+        }
+        // (chunks of 4096 superblocks: the pairs stay inside one)
+        if (tile)
+          for (size_t i = s0; i + 1 < s1; i += 2) iq3s_tile_pair(dst + i * bp);
+      }
+      memset(dst + nsb * bp, 0, kRawSlack);
     }
-    memset(dst + nsb * bp, 0, kRawSlack);
     if (!host) CL_CHECK(clEnqueueUnmapMemObject(cl_.queue, m, dst, 0, nullptr, nullptr));
     else host_src_note(m, type, data, nbytes, nsb);  // (ARC_HOST_CPU: the CPU's GEMV of it, zero/xe2/engine_hostcpu.h)
     return m;
@@ -270,7 +298,7 @@
     w.type = type;
     w.N = N;
     w.K = K;
-    w.raw = view ? *view : upload_padded(type, data, nbytes, K % 512 == 0, &w.iq3t);  // (a view: its stack's flag, set there)
+    w.raw = view ? *view : upload_padded(type, data, nbytes, K % 512 == 0, &w.iq3t, N);  // (a view: its stack's flag, set there)
     // Q8_0 (per-32 float scales) is fastest in its own repacked kernel; everything else goes through W8. The
     // repacked copy is kept only with resident weights of a dense model; otherwise (MoE: ~1.5 GB of Q8_0 matrices
     // stored twice, or just-in-time models) prompt chunks decode the raw rows into the same form (decode_w8, PER32).
@@ -417,9 +445,9 @@
     L.qz.N = C + Di + (L.qz_ab ? nab : 0);
     L.qz.K = E;
     L.qz.role = kRoles - 1;
-    L.qz.raw = upload_padded(type, cat.data(), cat.size(), E % 512 == 0, &L.qz.iq3t);
+    L.qz.raw = upload_padded(type, cat.data(), cat.size(), E % 512 == 0, &L.qz.iq3t, L.qz.N);
     has_qz_ = true;
-    const size_t sbr = (size_t)E / 256 * raw_padded_sb_bytes(type);
+    const size_t sbr = (size_t)E / 256 * raw_padded_sb_bytes(type) + (size_t)row_pad_bytes();
     auto view = [&](int row0, int N) -> cl_mem {
       if (!L.qz.raw) return nullptr;  // (dry load)
       cl_buffer_region reg{(size_t)row0 * sbr, (size_t)N * sbr + kRawSlack};  // (the slack upload_padded leaves: the
@@ -821,6 +849,274 @@
       });
     }
   }
+
+  // ARC_ALIGN_AUDIT=1 (M3-P1): logs base address alignment (mod 16 / mod 64), superblock / block size, row stride
+  // (and mod 16 / mod 64 / mod 512), and sub-block field alignments for every decode-relevant weight buffer and F16 /
+  // F32 / KV tensor read per token. Off by default (zero runtime overhead).
+  void align_audit_report() const {
+    static const bool on = getenv("ARC_ALIGN_AUDIT") && atoi(getenv("ARC_ALIGN_AUDIT")) != 0;
+    if (!on || opt.dry) return;
+    struct Rec {
+      std::string name;
+      std::string kind;  // "weight", "view", "mtp", "vec_f32", "state_f32", "kv"
+      std::string type;
+      int N = 0, K = 0;
+      size_t bb = 0, bp = 0, row_stride = 0, bytes = 0;
+      uintptr_t addr = 0;
+      bool regrouped = false, d_last = false, sub_16b = true, sub_4b = true;
+      std::string sub_note;
+    };
+    std::vector<Rec> recs;
+    auto inspect_sub = [](uint32_t t, size_t bb, size_t bp, bool& s16, bool& s4, std::string& note) {
+      s16 = (bp % 16 == 0);
+      s4 = (bp % 4 == 0);
+      switch (t) {
+        case GGML_Q4_K:
+          // d(0,2B), dmin(2,2B), sc/mn(4..15,12B), qs(16..143,128B); read via block_read into SLM
+          s16 = (bp % 16 == 0); s4 = true;
+          note = "d@0(2B) dmin@2(2B) sc/mn@4(12B) qs@16(128B,16B-al); SLM block_read";
+          break;
+        case GGML_Q5_K:
+          s16 = (bp % 16 == 0); s4 = true;
+          note = "d@0(2B) dmin@2(2B) sc/mn@4(12B) qh@16(32B,16B-al) qs@48(128B,16B-al); SLM block_read";
+          break;
+        case GGML_Q6_K:
+          // ql@0(128B), qh@128(64B), sc@192(16B), d@208(2B), pad@210(6B -> bp=216); bp%16=8 (odd sb base 8B-aligned)
+          s16 = false; s4 = true;
+          note = "ql@0(128B) qh@128(64B) sc@192(16B) d@208(2B) pad(6B->216B); odd-SB @8mod16 (vload8 8B-al)";
+          break;
+        case GGML_Q8_0:
+          s16 = (bp % 16 == 0); s4 = true;
+          note = "regrouped: d8@0(16B,16B-al) qs@16(256B,16B-al); bp=272(16B-al)";
+          break;
+        case GGML_Q4_0:
+        case GGML_IQ4_NL:
+          s16 = (bp % 16 == 0); s4 = true;
+          note = "regrouped: d8@0(16B,16B-al) qs@16(128B,16B-al); bp=144(16B-al)";
+          break;
+        case GGML_IQ4_XS:
+          s16 = false; s4 = true;
+          note = "d@0(2B) sh@2(2B) sl@4(4B) qs@8(128B,8B-al); bp=136(8mod16)";
+          break;
+        case GGML_IQ2_XXS:
+          // regrouped d-last: qs+signs@0(64B,8B/32-blk), d@64(2B), pad@66(6B -> bp=72); bp%16=8
+          s16 = false; s4 = true;
+          note = "regrouped d-last: qs+sc@0(64B,vload2 8B-al) d@64(2B) pad(6B->72B,8mod16)";
+          break;
+        case GGML_IQ2_XS:
+          // regrouped d-last: qs@0(64B,vload2 8B-al), sc@64(8B,4B-al), d@72(2B), pad@74(6B -> bp=80); bp%16=0
+          s16 = true; s4 = true;
+          note = "regrouped d-last: qs@0(64B,16B-al) sc@64(8B,16B-al) d@72(2B) pad(6B->80B,16B-al)";
+          break;
+        case GGML_IQ2_S:
+          // regrouped d-last: qs@0(32B), signs@32(32B), qh@64(8B), sc@72(8B), d@80(2B), pad@82(6B -> bp=88); bp%16=8
+          s16 = false; s4 = true;
+          note = "regrouped d-last: qs@0(32B) sgn@32(32B) qh@64(8B) sc@72(8B) d@80(2B) pad(6B->88B,8mod16)";
+          break;
+        case GGML_IQ3_XXS:
+          // regrouped d-last: qs@0(64B,vload2 8B-al), sgn+sc@64(32B,4B-al), d@96(2B), pad@98(6B -> bp=104); bp%16=8
+          s16 = false; s4 = true;
+          note = "regrouped d-last: qs@0(64B,8B-al) sgn+sc@64(32B,8B-al) d@96(2B) pad(6B->104B,8mod16)";
+          break;
+        case GGML_IQ3_S:
+          // regrouped d-last: qs@0(64B), qh@64(8B), sgn@72(32B), sc@104(4B), d@108(2B), pad@110(2B -> bp=112); bp%16=0
+          s16 = true; s4 = true;
+          note = "regrouped d-last: qs@0(64B,16B-al) qh@64(8B) sgn@72(32B) sc@104(4B) d@108(2B) pad(2B->112B,16B-al)";
+          break;
+        default:
+          note = "quantized";
+          break;
+      }
+    };
+    auto add_w = [&](const std::string& nm, const char* kind, const GpuWeight& w) {
+      if (!w.raw || w.N <= 0 || w.K <= 0) return;
+      Rec r;
+      r.name = nm;
+      r.kind = kind;
+      r.type = ggml_type_name(w.type);
+      r.N = w.N;
+      r.K = w.K;
+      if (w.type == GGML_F32 || w.type == GGML_F16 || w.type == GGML_BF16) {
+        const size_t el = w.type == GGML_F32 ? 4 : 2;
+        r.bb = r.bp = el;
+        r.row_stride = (size_t)w.K * el;
+        r.sub_16b = (r.row_stride % 16 == 0);
+        r.sub_4b = (r.row_stride % 4 == 0);
+        r.sub_note = "dense float/bf16/f16 rows";
+      } else {
+        r.bb = (size_t)gguf_sb_bytes(w.type);
+        r.bp = (size_t)raw_padded_sb_bytes(w.type);
+        r.row_stride = (size_t)(w.K / 256) * r.bp + (size_t)row_pad_bytes();
+        r.regrouped = gpu_regrouped(w.type);
+        r.d_last = gpu_d_last(w.type);
+        inspect_sub(w.type, r.bb, r.bp, r.sub_16b, r.sub_4b, r.sub_note);
+      }
+      r.bytes = w.raw->size;
+      r.addr = (uintptr_t)w.raw->ptr;
+      recs.push_back(std::move(r));
+    };
+    auto add_mem = [&](const std::string& nm, const char* kind, const char* ty, cl_mem m, int N, int K, size_t elem_b, const char* note) {
+      if (!m) return;
+      Rec r;
+      r.name = nm;
+      r.kind = kind;
+      r.type = ty;
+      r.N = N;
+      r.K = K;
+      r.bb = r.bp = elem_b;
+      r.row_stride = (size_t)K * elem_b;
+      r.bytes = m->size;
+      r.addr = (uintptr_t)m->ptr;
+      r.sub_16b = (r.row_stride % 16 == 0);
+      r.sub_4b = (r.row_stride % 4 == 0);
+      r.sub_note = note;
+      recs.push_back(std::move(r));
+    };
+
+    if (out_norm_) add_mem("output_norm.weight", "vec_f32", "F32(from_GGUF)", out_norm_, 1, hp.n_embd, 4, "GGUF F32->F32 norm vec");
+    add_w("lm_head (output.weight)", "weight", lm_head_);
+    if (draft_head_.raw) add_w("draft_head", "mtp", draft_head_);
+
+    for (size_t i = 0; i < layers_.size(); ++i) {
+      const Layer& L = layers_[i];
+      const std::string p = "blk." + std::to_string(L.il) + ".";
+      add_mem(p + "attn_norm", "vec_f32", "F32", L.attn_norm, 1, hp.n_embd, 4, "norm vec");
+      add_mem(p + "post_norm", "vec_f32", "F32", L.post_norm, 1, hp.n_embd, 4, "norm vec");
+      if (hp.recurrent(L.il)) {
+        if (L.qz.raw) add_w(p + "qz_stack", "weight", L.qz);
+        add_w(p + "attn_qkv", L.qz.raw ? "view" : "weight", L.qkv);
+        add_w(p + "attn_gate(z)", L.qz.raw ? "view" : "weight", L.z);
+        add_w(p + "ssm_ab", (L.qz.raw && L.qz_ab) ? "view" : "weight", L.ab);
+        add_w(p + "ssm_out", "weight", L.ssm_out);
+        add_mem(p + "ssm_conv1d", "vec_f32", "F32(from_BF16)", L.conv_w, hp.conv_dim(), hp.conv_k, 4, "GGUF BF16->F32 at load");
+        add_mem(p + "ssm_norm", "vec_f32", "F32(from_F32)", L.ssm_norm, 1, hp.ssm_d_inner, 4, "norm vec");
+        add_mem(p + "gdn_state_S", "state_f32", "F32", L.S, hp.ssm_nv * hp.ssm_d_state, hp.ssm_d_state, 4, "recurrent state S");
+      } else {
+        add_w(p + "attn_q", "weight", L.wq);
+        add_w(p + "attn_k", "weight", L.wk);
+        add_w(p + "attn_v", "weight", L.wv);
+        add_w(p + "attn_output", "weight", L.wo);
+        add_mem(p + "attn_q_norm", "vec_f32", "F32(from_F16)", L.q_norm, 1, hp.head_dim, 4, "GGUF F16->F32 at load");
+        add_mem(p + "attn_k_norm", "vec_f32", "F32(from_F16)", L.k_norm, 1, hp.head_dim, 4, "GGUF F16->F32 at load");
+        if (opt.attn_int8) {
+          add_mem(p + "kv_kq(int8)", "kv", "INT8", L.kq, hp.n_head_kv * ctx, hp.head_dim, 1, "16-key int8 tiles");
+          add_mem(p + "kv_vq(int8)", "kv", "INT8", L.vq, hp.n_head_kv * ctx, hp.head_dim, 1, "16-key int8 tiles");
+        } else {
+          add_mem(p + "kv_kc(f16)", "kv", "F16", L.kc, hp.n_head_kv * ctx, hp.head_dim, 2, "F16 K cache");
+          add_mem(p + "kv_vc(f16)", "kv", "F16", L.vc, hp.n_head_kv * ctx, hp.head_dim, 2, "F16 V cache");
+        }
+      }
+      add_w(p + "ffn_gate", "weight", L.gate);
+      add_w(p + "ffn_up", "weight", L.up);
+      add_w(p + "ffn_down", "weight", L.down);
+    }
+
+    if (mtp_block_) {
+      const std::string mp = "blk." + std::to_string(hp.n_layer) + ".";
+      add_w(mp + "nextn.eh_proj", "mtp", eh_proj_);
+      add_w(mp + "attn_q", "mtp", mtp_.wq);
+      add_w(mp + "attn_k", "mtp", mtp_.wk);
+      add_w(mp + "attn_v", "mtp", mtp_.wv);
+      add_w(mp + "attn_output", "mtp", mtp_.wo);
+      add_w(mp + "ffn_gate", "mtp", mtp_.gate);
+      add_w(mp + "ffn_up", "mtp", mtp_.up);
+      add_w(mp + "ffn_down", "mtp", mtp_.down);
+    }
+
+    // Count GGUF F16/BF16 tensors in the file and report how they were handled
+    int gguf_f16 = 0, gguf_bf16 = 0, gguf_f32 = 0;
+    for (const auto& t : f_.tensors) {
+      if (t.type == GGML_F16) ++gguf_f16;
+      else if (t.type == GGML_BF16) ++gguf_bf16;
+      else if (t.type == GGML_F32) ++gguf_f32;
+    }
+
+    // Aggregate summary by (kind, type, N, K, row_stride)
+    struct GroupKey {
+      std::string kind, type, role_tag;
+      int N, K;
+      size_t bb, bp, row_stride;
+      bool operator<(const GroupKey& o) const {
+        return std::tie(kind, role_tag, type, N, K, row_stride) <
+               std::tie(o.kind, o.role_tag, o.type, o.N, o.K, o.row_stride);
+      }
+    };
+    struct GroupStat {
+      int count = 0;
+      int base_unaligned_16 = 0, base_unaligned_64 = 0, base_unaligned_4096 = 0;
+      uint64_t total_bytes = 0;
+      uintptr_t first_addr = 0;
+      std::string sub_note;
+      bool sub_16b = true;
+    };
+    std::map<GroupKey, GroupStat> groups;
+
+    int total_w = 0, base_bad16 = 0, base_bad64 = 0, stride_bad16 = 0, stride_bad64 = 0, stride_pow2 = 0, sb_odd8 = 0;
+    uint64_t total_w_bytes = 0, sb_odd8_bytes = 0;
+
+    for (const Rec& r : recs) {
+      std::string rtag = r.name;
+      if (rtag.compare(0, 4, "blk.") == 0) {
+        const size_t dot = rtag.find('.', 4);
+        if (dot != std::string::npos) rtag = "blk.*." + rtag.substr(dot + 1);
+      }
+      GroupKey gk{r.kind, r.type, rtag, r.N, r.K, r.bb, r.bp, r.row_stride};
+      GroupStat& gs = groups[gk];
+      gs.count++;
+      if (gs.count == 1) {
+        gs.first_addr = r.addr;
+        gs.sub_note = r.sub_note;
+        gs.sub_16b = r.sub_16b;
+      }
+      if (r.addr % 16 != 0) gs.base_unaligned_16++;
+      if (r.addr % 64 != 0) gs.base_unaligned_64++;
+      if (r.addr % 4096 != 0) gs.base_unaligned_4096++;
+      gs.total_bytes += r.bytes;
+
+      if (r.kind == "weight" || r.kind == "view" || r.kind == "mtp") {
+        total_w++;
+        if (r.kind != "view") total_w_bytes += r.bytes;
+        if (r.addr % 16 != 0) base_bad16++;
+        if (r.addr % 64 != 0) base_bad64++;
+        if (r.row_stride % 16 != 0) stride_bad16++;
+        if (r.row_stride % 64 != 0) stride_bad64++;
+        if (r.row_stride > 0 && (r.row_stride & (r.row_stride - 1)) == 0) stride_pow2++;
+        if (!r.sub_16b) {
+          sb_odd8++;
+          if (r.kind != "view") sb_odd8_bytes += r.bytes;
+        }
+      }
+    }
+
+    fprintf(stderr, "\n=== ARC_ALIGN_AUDIT SUMMARY (%s) ===\n", path_.c_str());
+    fprintf(stderr, "  GGUF float tensors in file : F16=%d, BF16=%d, F32=%d (all 1D norms/convs dequantized to F32 at load; 2D floats requantized to Q8_0; 0 F16 weight GEMVs)\n",
+            gguf_f16, gguf_bf16, gguf_f32);
+    fprintf(stderr, "  Decode weight/view streams : %d tensors (%.2f GiB uploaded raw buffers + %d byte row pad)\n",
+            total_w, total_w_bytes / 1073741824.0, row_pad_bytes());
+    fprintf(stderr, "  Base address misalignment  : %d / %d mod-16 != 0 | %d / %d mod-64 != 0 (all clCreateBuffer allocations 4096-B page-aligned)\n",
+            base_bad16, total_w, base_bad64, total_w);
+    fprintf(stderr, "  Row stride alignment       : %d / %d mod-16 != 0 | %d / %d mod-64 != 0 | %d / %d power-of-two stride\n",
+            stride_bad16, total_w, stride_bad64, total_w, stride_pow2, total_w);
+    fprintf(stderr, "  8B-but-not-16B superblocks : %d / %d streams (%.2f GiB) have BBP %% 16 == 8 (odd superblocks start at 8 mod 16)\n\n",
+            sb_odd8, total_w, sb_odd8_bytes / 1073741824.0);
+
+    fprintf(stderr, "  %-24s | %-7s | %-7s | %4s | %13s | %4s | %4s | %6s | %5s | %5s | %5s | %5s | %s\n",
+            "Stream / Role", "Kind", "Type", "Cnt", "Shape [N x K]", "BB", "BBP", "Stride", "b%16", "b%64", "s%64", "s%512", "Sub-block Layout & Alignment");
+    fprintf(stderr, "  -------------------------+---------+---------+------+---------------+------+------+--------+-------+-------+-------+-------+---------------------------------------------\n");
+    for (const auto& [gk, gs] : groups) {
+      char shape[32];
+      snprintf(shape, sizeof shape, "%d x %d", gk.N, gk.K);
+      fprintf(stderr, "  %-24s | %-7s | %-7s | %4d | %13s | %4zu | %4zu | %6zu | %5zu | %5zu | %5zu | %5zu | %s\n",
+              gk.role_tag.c_str(), gk.kind.c_str(), gk.type.c_str(), gs.count, shape,
+              gk.bb, gk.bp, gk.row_stride,
+              (size_t)(gs.first_addr % 16), (size_t)(gs.first_addr % 64),
+              gk.row_stride % 64, gk.row_stride % 512,
+              gs.sub_note.c_str());
+    }
+    fprintf(stderr, "=== END ARC_ALIGN_AUDIT ===\n\n");
+    fflush(stderr);
+  }
+
 
   // MoE FFN: the router and the shared-expert gate requantized together to Q8_0 (one GEMM gives both), the shared
   // expert's Q8_0 matrices, and the routed experts' 2-bit codes and bf16 scales as they are in the file.

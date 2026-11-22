@@ -1,0 +1,30 @@
+# speedbench config=Q4_K_S-raw date=2026-11-21T17:35:43-08:00
+# model=/home/bschooley/models/Qwen3.8-40B-Ultimate-Heretic-Uncn-Turbo-Brilli-50x-AGI-NEO-MTP-Q4_K_S.gguf
+# command=/home/bschooley/inferzero-p1/bin/serverz -m /home/bschooley/models/Qwen3.8-40B-Ultimate-Heretic-Uncn-Turbo-Brilli-50x-AGI-NEO-MTP-Q4_K_S.gguf --slots 1 --ctx 8192 --host 127.0.0.1 --port 8090 --no-prefix-cache --session-cache-gb 0
+# mode=two-phase full_prompts=prose,structured (repeats=1 cooldown=30s max_tokens=150) screen_other (repeats=1 cooldown=30s max_tokens=150)
+2026-11-21 17:35:43.047 I inferzero built from source (Nov 21 2026)
+2026-11-21 17:35:43.048 I system: CachyOS, kernel 7.3.5-2-cachyos, Intel(R) Core(TM) Ultra 7 155H, 22 logical processors, RAM 30.7 GiB (29.1 free)
+2026-11-21 17:35:43.343 I GPU: Intel(R) Arc(TM) Graphics, driver 26.40.40196, 128 EUs, 2250 MHz, 28.4 GiB (shared with the CPU), XMX no, 8- and 16-lane sub-groups
+2026-11-21 17:36:09.471 I loaded in 25.9 s | 96 layers | ctx 8192 | chunk 4096 | GPU 23.24 GiB | weights W8 just-in-time
+2026-11-21 17:36:09.471 I model: qwen35, 96 layers, embedding 5120, heads 24 / kv 4, head 256, ffn 17408, vocab 248320, trained ctx 262144, file 21.16 GiB, Q4_K_S
+2026-11-21 17:36:20.035 I serving /home/bschooley/models/Qwen3.8-40B-Ultimate-Heretic-Uncn-Turbo-Brilli-50x-AGI-NEO-MTP-Q4_K_S.gguf as "Qwen3.8-40B-Ultimate-Heretic-Uncn-Turbo-Brilli-50x-AGI-NEO-MTP-Q4_K_S"
+2026-11-21 17:36:20.036 I listening on http://127.0.0.1:8090  (OpenAI API at /v1, web UI at /)
+
+[Q4_K_S-raw] phase=full prompt=prose rep=1/1 | pp=126 tok (10.2 t/s) | gen=150 tok in 47.90s | srv_tps=3.13 | client_tps=3.13 | MTP=-
+  server_log: 2026-11-21 17:37:21.313 I [chatcmpl-arc1] prompt 126 tok (cached 0) 12.4 s (10.2 t/s) | gen 150 tok 47.9 s (3.13 t/s) | length | first token 12.39 s | context 276 of 8192 | slot 0
+[Q4_K_S-raw] phase=full prompt=structured rep=1/1 | pp=340 tok (23.9 t/s) | gen=150 tok in 47.60s | srv_tps=3.15 | client_tps=3.15 | MTP=-
+  server_log: 2026-11-21 17:38:53.242 I [chatcmpl-arc2] prompt 340 tok (cached 0) 14.2 s (23.9 t/s) | gen 150 tok 47.6 s (3.15 t/s) | length | first token 14.21 s | context 490 of 8192 | slot 0
+[Q4_K_S-raw] phase=screen prompt=code rep=1/1 | pp=155 tok (13.0 t/s) | gen=150 tok in 47.70s | srv_tps=3.15 | client_tps=3.15 | MTP=-
+  server_log: 2026-11-21 17:40:22.866 I [chatcmpl-arc3] prompt 155 tok (cached 0) 11.9 s (13.0 t/s) | gen 150 tok 47.7 s (3.15 t/s) | length | first token 11.91 s | context 305 of 8192 | slot 0
+[Q4_K_S-raw] phase=screen prompt=fiction rep=1/1 | pp=131 tok (11.3 t/s) | gen=150 tok in 47.80s | srv_tps=3.14 | client_tps=3.14 | MTP=-
+  server_log: 2026-11-21 17:41:52.330 I [chatcmpl-arc4] prompt 131 tok (cached 0) 11.6 s (11.3 t/s) | gen 150 tok 47.8 s (3.14 t/s) | length | first token 11.62 s | context 281 of 8192 | slot 0
+
+=== SPEEDBENCH MEDIAN SUMMARY (Q4_K_S-raw) ===
+| Config | Phase | Prompt | Runs (srv tok/s) | median srv tok/s | median client tok/s | median pp tok/s | median MTP accepted (total x/y) |
+|---|---|---|---|---:|---:|---:|---|
+| Q4_K_S-raw | full (1x) | prose | 3.13 | 3.13 | 3.13 | 10.2 | - |
+| Q4_K_S-raw | full (1x) | structured | 3.15 | 3.15 | 3.15 | 23.9 | - |
+| Q4_K_S-raw | screen (1x) | code | 3.15 | 3.15 | 3.15 | 13.0 | - |
+| Q4_K_S-raw | screen (1x) | fiction | 3.14 | 3.14 | 3.14 | 11.3 | - |
+| **Q4_K_S-raw** | **FULL-PASS MEDIAN** | **2 full prompts (2 runs)** | — | **3.14** | **3.14** | **17.0** | **-** |
+| **Q4_K_S-raw** | **ALL-RUNS MEDIAN** | **4 prompts (4 runs)** | — | **3.15** | **3.15** | — | **-** |

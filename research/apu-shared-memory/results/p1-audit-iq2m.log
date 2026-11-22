@@ -1,0 +1,50 @@
+=== Rusticl warning: Patched Mesa libclc not detected. Upstream libclc may contain known bugs or breaking changes and isn't guaranteed to work reliably. Please visit https://gitlab.freedesktop.org/karolherbst/mesa-libclc for more information. ===
+
+=== ARC_ALIGN_AUDIT SUMMARY (/home/bschooley/models/Qwen3.8-40B-Ultimate-Heretic-Uncn-Turbo-Brilli-50x-AGI-NEO-MTP-IQ2_M.gguf) ===
+  GGUF float tensors in file : F16=0, BF16=0, F32=536 (all 1D norms/convs dequantized to F32 at load; 2D floats requantized to Q8_0; 0 F16 weight GEMVs)
+  Decode weight/view streams : 681 tensors (13.71 GiB uploaded raw buffers + 0 byte row pad)
+  Base address misalignment  : 0 / 681 mod-16 != 0 | 0 / 681 mod-64 != 0 (all clCreateBuffer allocations 4096-B page-aligned)
+  Row stride alignment       : 0 / 681 mod-16 != 0 | 396 / 681 mod-64 != 0 | 0 / 681 power-of-two stride
+  8B-but-not-16B superblocks : 468 / 681 streams (9.85 GiB) have BBP % 16 == 8 (odd superblocks start at 8 mod 16)
+
+  Stream / Role            | Kind    | Type    |  Cnt | Shape [N x K] |   BB |  BBP | Stride |  b%16 |  b%64 |  s%64 | s%512 | Sub-block Layout & Alignment
+  -------------------------+---------+---------+------+---------------+------+------+--------+-------+-------+-------+-------+---------------------------------------------
+  blk.*.kv_kq(int8)        | kv      | INT8    |   24 |   16384 x 256 |    1 |    1 |    256 |     0 |     0 |     0 |   256 | 16-key int8 tiles
+  blk.*.kv_vq(int8)        | kv      | INT8    |   24 |   16384 x 256 |    1 |    1 |    256 |     0 |     0 |     0 |   256 | 16-key int8 tiles
+  blk.*.attn_k             | mtp     | Q4_K    |    1 |   1024 x 5120 |  144 |  144 |   2880 |     0 |     0 |     0 |   320 | d@0(2B) dmin@2(2B) sc/mn@4(12B) qs@16(128B,16B-al); SLM block_read
+  blk.*.attn_output        | mtp     | Q4_K    |    1 |   5120 x 6144 |  144 |  144 |   3456 |     0 |     0 |     0 |   384 | d@0(2B) dmin@2(2B) sc/mn@4(12B) qs@16(128B,16B-al); SLM block_read
+  blk.*.attn_q             | mtp     | Q4_K    |    1 |  12288 x 5120 |  144 |  144 |   2880 |     0 |     0 |     0 |   320 | d@0(2B) dmin@2(2B) sc/mn@4(12B) qs@16(128B,16B-al); SLM block_read
+  blk.*.attn_v             | mtp     | Q4_K    |    1 |   1024 x 5120 |  144 |  144 |   2880 |     0 |     0 |     0 |   320 | d@0(2B) dmin@2(2B) sc/mn@4(12B) qs@16(128B,16B-al); SLM block_read
+  blk.*.ffn_down           | mtp     | Q4_K    |    1 |  5120 x 17408 |  144 |  144 |   9792 |     0 |     0 |     0 |    64 | d@0(2B) dmin@2(2B) sc/mn@4(12B) qs@16(128B,16B-al); SLM block_read
+  blk.*.ffn_gate           | mtp     | Q4_K    |    1 |  17408 x 5120 |  144 |  144 |   2880 |     0 |     0 |     0 |   320 | d@0(2B) dmin@2(2B) sc/mn@4(12B) qs@16(128B,16B-al); SLM block_read
+  blk.*.ffn_up             | mtp     | Q4_K    |    1 |  17408 x 5120 |  144 |  144 |   2880 |     0 |     0 |     0 |   320 | d@0(2B) dmin@2(2B) sc/mn@4(12B) qs@16(128B,16B-al); SLM block_read
+  blk.*.nextn.eh_proj      | mtp     | Q4_K    |    1 |  5120 x 10240 |  144 |  144 |   5760 |     0 |     0 |     0 |   128 | d@0(2B) dmin@2(2B) sc/mn@4(12B) qs@16(128B,16B-al); SLM block_read
+  blk.*.gdn_state_S        | state_f32 | F32     |   72 |    6144 x 128 |    4 |    4 |    512 |     0 |     0 |     0 |     0 | recurrent state S
+  blk.*.attn_k_norm        | vec_f32 | F32(from_F16) |   24 |       1 x 256 |    4 |    4 |   1024 |     0 |     0 |     0 |     0 | GGUF F16->F32 at load
+  blk.*.attn_norm          | vec_f32 | F32     |   96 |      1 x 5120 |    4 |    4 |  20480 |     0 |     0 |     0 |     0 | norm vec
+  blk.*.attn_q_norm        | vec_f32 | F32(from_F16) |   24 |       1 x 256 |    4 |    4 |   1024 |     0 |     0 |     0 |     0 | GGUF F16->F32 at load
+  blk.*.post_norm          | vec_f32 | F32     |   96 |      1 x 5120 |    4 |    4 |  20480 |     0 |     0 |     0 |     0 | norm vec
+  blk.*.ssm_conv1d         | vec_f32 | F32(from_BF16) |   72 |     10240 x 4 |    4 |    4 |     16 |     0 |     0 |    16 |    16 | GGUF BF16->F32 at load
+  blk.*.ssm_norm           | vec_f32 | F32(from_F32) |   72 |      1 x 6144 |    4 |    4 |  24576 |     0 |     0 |     0 |     0 | norm vec
+  output_norm.weight       | vec_f32 | F32(from_GGUF) |    1 |      1 x 5120 |    4 |    4 |  20480 |     0 |     0 |     0 |     0 | GGUF F32->F32 norm vec
+  blk.*.attn_gate(z)       | weight  | IQ2_S   |   72 |   6144 x 5120 |   82 |   88 |   1760 |     0 |     0 |    32 |   224 | regrouped d-last: qs@0(32B) sgn@32(32B) qh@64(8B) sc@72(8B) d@80(2B) pad(6B->88B,8mod16)
+  blk.*.attn_k             | weight  | IQ2_S   |   24 |   1024 x 5120 |   82 |   88 |   1760 |     0 |     0 |    32 |   224 | regrouped d-last: qs@0(32B) sgn@32(32B) qh@64(8B) sc@72(8B) d@80(2B) pad(6B->88B,8mod16)
+  blk.*.attn_output        | weight  | IQ3_S   |   24 |   5120 x 6144 |  110 |  112 |   2688 |     0 |     0 |     0 |   128 | regrouped d-last: qs@0(64B,16B-al) qh@64(8B) sgn@72(32B) sc@104(4B) d@108(2B) pad(2B->112B,16B-al)
+  blk.*.attn_q             | weight  | IQ2_S   |   24 |  12288 x 5120 |   82 |   88 |   1760 |     0 |     0 |    32 |   224 | regrouped d-last: qs@0(32B) sgn@32(32B) qh@64(8B) sc@72(8B) d@80(2B) pad(6B->88B,8mod16)
+  blk.*.attn_qkv           | weight  | Q4_K    |   72 |  10240 x 5120 |  144 |  144 |   2880 |     0 |     0 |     0 |   320 | d@0(2B) dmin@2(2B) sc/mn@4(12B) qs@16(128B,16B-al); SLM block_read
+  blk.*.attn_v             | weight  | Q4_K    |   24 |   1024 x 5120 |  144 |  144 |   2880 |     0 |     0 |     0 |   320 | d@0(2B) dmin@2(2B) sc/mn@4(12B) qs@16(128B,16B-al); SLM block_read
+  blk.*.ffn_down           | weight  | IQ2_S   |   84 |  5120 x 17408 |   82 |   88 |   5984 |     0 |     0 |    32 |   352 | regrouped d-last: qs@0(32B) sgn@32(32B) qh@64(8B) sc@72(8B) d@80(2B) pad(6B->88B,8mod16)
+  blk.*.ffn_down           | weight  | IQ3_S   |   12 |  5120 x 17408 |  110 |  112 |   7616 |     0 |     0 |     0 |   448 | regrouped d-last: qs@0(64B,16B-al) qh@64(8B) sgn@72(32B) sc@104(4B) d@108(2B) pad(2B->112B,16B-al)
+  blk.*.ffn_gate           | weight  | IQ2_S   |   96 |  17408 x 5120 |   82 |   88 |   1760 |     0 |     0 |    32 |   224 | regrouped d-last: qs@0(32B) sgn@32(32B) qh@64(8B) sc@72(8B) d@80(2B) pad(6B->88B,8mod16)
+  blk.*.ffn_up             | weight  | IQ2_S   |   96 |  17408 x 5120 |   82 |   88 |   1760 |     0 |     0 |    32 |   224 | regrouped d-last: qs@0(32B) sgn@32(32B) qh@64(8B) sc@72(8B) d@80(2B) pad(6B->88B,8mod16)
+  blk.*.ssm_ab             | weight  | Q8_0    |   72 |     96 x 5120 |  272 |  272 |   5440 |     0 |     0 |     0 |   320 | regrouped: d8@0(16B,16B-al) qs@16(256B,16B-al); bp=272(16B-al)
+  blk.*.ssm_out            | weight  | IQ2_S   |   72 |   5120 x 6144 |   82 |   88 |   2112 |     0 |     0 |     0 |    64 | regrouped d-last: qs@0(32B) sgn@32(32B) qh@64(8B) sc@72(8B) d@80(2B) pad(6B->88B,8mod16)
+  lm_head (output.weight)  | weight  | Q5_K    |    1 | 248320 x 5120 |  176 |  176 |   3520 |     0 |     0 |     0 |   448 | d@0(2B) dmin@2(2B) sc/mn@4(12B) qh@16(32B,16B-al) qs@48(128B,16B-al); SLM block_read
+=== END ARC_ALIGN_AUDIT ===
+
+loaded: 96 layers, n_embd 5120, vocab 248320 | GPU buffers 16.58 GiB | W8 just-in-time | chunk 4096 | ctx 4096 | load 20531 ms
+prompt: 75 tokens | time to first token 3030.4 ms (24.7 t/s)
+top-10 next token: 248046(0.0564) 2(0.0350) 7734(0.0281) 760(0.0261) 40(0.0259) 248069(0.0252) 24342(0.0181) 1919(0.0161) 5439(0.0136) 15666(0.0121)
+greedy: 248046
+generation: 1 tokens in 0.0 ms (727272.73 t/s)
+weights read: 0 MB per pass, 0.0 GB/s (0 % of this GPU's measured 88 GB/s) (drafter weights not counted)

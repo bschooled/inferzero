@@ -378,7 +378,7 @@ void npu_rows(int kind, int il, const GpuWeight& w, int ng, int nn, int per_row)
     dq = from(w.wq, (size_t)ng * K);
     dh = from(w.wh, (size_t)ng * (K / 256) * (q8 ? 8 : 10) * 4);
   } else {
-    decode_w8(from(w.raw, (size_t)ng * (K / 256) * raw_padded_sb_bytes(w.type)), w.type, nn, K, dq, dh, w.iq3t);  // (whole rows: a tiled IQ3_S range keeps its pairs)
+    decode_w8(from(w.raw, (size_t)ng * ((size_t)(K / 256) * raw_padded_sb_bytes(w.type) + (size_t)row_pad_bytes())), w.type, nn, K, dq, dh, w.iq3t);  // (whole rows: a tiled IQ3_S range keeps its pairs)
   }
   int KK = K, sc32 = w.gemm_qtype & 1, hm = !q8 && w.gemm_qtype >= 102, pr = per_row, qq = q8;
   set_args(npu_w8rows_, 0, dq, dh, KK, sc32, hm, pr, npu_gwq_[kind], npu_gws_[kind], qq);
