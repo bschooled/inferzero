@@ -1,0 +1,3 @@
+static  windows=49 window_wall=342.3 window_gpu=295.2 draft_wall=41.6 draft_gpu=35.40 draft_gemm=34.34 draft_launches=49.0 draft_copies=6.5 verify_gpu=251.5 tok/win=2.43
+v16k    windows=57 window_wall=317.9 window_gpu=273.4 draft_wall=14.7 draft_gpu=11.00 draft_gemm=9.94 draft_launches=48.5 draft_copies=6.4 verify_gpu=252.7 tok/win=2.09
+v32k    windows=51 window_wall=314.5 window_gpu=271.5 draft_wall=15.7 draft_gpu=12.60 draft_gemm=11.55 draft_launches=48.8 draft_copies=6.5 verify_gpu=250.5 tok/win=2.33

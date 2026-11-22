@@ -1,0 +1,5 @@
+A. default-off bit-identical vs main ea5de85 (--dump-logits, MTP d3, prose, n=16)
+   main: 0d848bc56af122598ff556aba4ccf54e7e1679b8bf785858c659068b8cf2f640
+   p4  : 0d848bc56af122598ff556aba4ccf54e7e1679b8bf785858c659068b8cf2f640
+   sizes: 15892480 / 15892480
+   RESULT: IDENTICAL

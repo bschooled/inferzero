@@ -1,0 +1,7 @@
+B. text identity, MTP d3, prose, n=96 (generated tokens; decode is a function of the ids)
+   static : 167cbeb5392a396025baa54ac0579702766d3e18223b9da7831069e10bfc280f  (499 bytes)
+   v16k   : 167cbeb5392a396025baa54ac0579702766d3e18223b9da7831069e10bfc280f  (499 bytes)
+   RESULT: SAME TEXT
+   v16k startup: inferzero: drafts from 16384 of the 248320 tokens (ARC_MTP_VOCAB; 23906 listed, 58 MB of the head), verification from all
+   static: weights read: 16398 MB per pass, 48.9 GB/s (56 % of this GPU's measured 88 GB/s) (drafter weights not counted) MTP: 93 drafts, 56 accepted (60.2 %), 2.46 tokens per main-model pass (39 passes) MTP time: drafting 1939.0 ms, verification 11034.4 ms (282.9 ms a pass), verify_done 47.5 ms 
+   v16k  : inferzero: drafts from 16384 of the 248320 tokens (ARC_MTP_VOCAB; 23906 listed, 58 MB of the head), verification from all weights read: 14492 MB per pass, 43.6 GB/s (50 % of this GPU's measured 88 GB/s) (drafter weights not counted) MTP: 116 drafts, 50 accepted (43.1 %), 2.09 tokens per main-model pass (46 passes) MTP time: drafting 1505.8 ms, verification 13663.4 ms (297.0 ms a pass), verify_done 65.5 ms 
