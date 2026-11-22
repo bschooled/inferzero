@@ -819,7 +819,15 @@
       st.slot = my_slot;
       st.tok = t;
       st.max_drafts = spec && (int)cached_.size() + 4 < eng_.ctx && i + 1 < max_tokens ? std::min(eng_.opt.mtp_drafts, max_tokens - i - 1) : 0;
+      // (P2: with --mtp-adaptive the controller picks this window's depth; 0 = a pure-AR window. --slots > 1
+      //  keeps the static cap: a batched pass is one verify for several slots, not one window)
+      if (st.max_drafts > 0 && eng_.opt.mtp_adaptive && eng_.opt.slots <= 1) {
+        const int pick = eng_.mtp_adaptive_pick(st.max_drafts);
+        st.ar_backoff = pick == 0;
+        st.max_drafts = pick;
+      }
       gen_step(lock, st, my_slot);
+      if (st.ar_backoff) eng_.mtp_adaptive_ar_done();
       n_batched += st.batched ? 1 : 0;
       cached_.push_back(t);
       if (st.max_drafts > 0) {

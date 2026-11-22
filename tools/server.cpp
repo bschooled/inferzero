@@ -668,6 +668,7 @@ class Server {
     int slot = 0, tok = 0, max_drafts = 0;  // max_drafts 0: one token without drafts
     bool done = false, alone = false;       // done: run by another request; alone: run it yourself
     bool dflash = false, batched = false;
+    bool ar_backoff = false;  // (P2: the adaptive controller asked for a pure-AR window)
     std::vector<int> drafts;
     std::vector<float> rows;  // logits of the token and of each draft
     std::string failed;       // the pass that ran it threw (its request fails too)
@@ -1020,7 +1021,7 @@ int main(int argc, char** argv) {
       {"--mtp", ""}, {"--mtp-model", "an MTP head .gguf"}, {"--dflash", "a DFlash2 drafter folder (with model.safetensors)"}, {"--no-dflash", ""},
       {"--draft", "auto, mtp or dflash"}, {"--mmproj", "an mmproj .gguf file"}, {"--no-mmproj", ""},
       {"--image-min-tokens", "a number of tokens"}, {"--image-max-tokens", "a number of tokens"},
-      {"--mtp-drafts", "a number, e.g. 3"}, {"--copy-draft", ""}, {"--think-budget", "a number of tokens"}, {"--preserve-thinking", ""},
+      {"--mtp-drafts", "a number, e.g. 3"}, {"--mtp-adaptive", ""}, {"--copy-draft", ""}, {"--think-budget", "a number of tokens"}, {"--preserve-thinking", ""},
       {"--kernels", "a folder"}, {"--session-cache-gb", "GiB, 0 = off"}, {"--session-dir", "a folder"},
       {"--slots", "1..8"}, {"--gpus", "1..64"}, {"--split", "tensor or layer"}, {"--tensor-split", "shares a GPU, e.g. 3,1"},
       {"--no-swap", ""}, {"--no-web-tools", ""},
@@ -1136,7 +1137,8 @@ int main(int argc, char** argv) {
     else if (a == "--no-mmproj") so.mmproj = "-";
     else if (a == "--image-min-tokens") so.img_min = atoi(next().c_str());
     else if (a == "--image-max-tokens") so.img_max = atoi(next().c_str());
-    else if (a == "--mtp-drafts") so.eo.mtp_drafts = to_int(a, next());
+    else if (a == "--mtp-drafts") so.eo.mtp_drafts = to_int(a, next()), so.eo.mtp_drafts_given = true;
+    else if (a == "--mtp-adaptive") so.eo.mtp_adaptive = true, so.eo.mtp = true;  // (P2: priced adaptive draft depth)
     else if (a == "--think-budget") so.think_budget = to_int(a, next());
     else if (a == "--preserve-thinking") so.preserve_thinking = true;
     else if (a == "--kernels") so.eo.kernel_dir = next();
@@ -1318,6 +1320,8 @@ int main(int argc, char** argv) {
             "  --mtp-drafts N        drafts per step, Qwen 2..7 (default: 7 for Qwen 27B-class, 3 on B-series cards; 7 with\n"
             "                        DFlash2; 5 for MoE; 3 for 4B and Flash Next; 2 otherwise); Gemma 4's drafter\n"
             "                        always drafts 3\n"
+            "  --mtp-adaptive        pick the MTP draft depth per window from measured acceptance and cost (1..7, or up to\n"
+            "                        --mtp-drafts when given), instead of the static depth (P2; ARC_MTP_ADAPTIVE=1 too)\n"
             "  --copy-draft          with --mtp: where the last tokens appeared earlier in the conversation, draft what\n"
             "                        followed them there (copy drafting; the same text, verified as any drafts)\n"
             "  --npu on|off|force    the NPU (Intel AI Boost) computes part of each prompt chunk next to the GPU\n"
