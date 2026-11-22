@@ -1,0 +1,46 @@
+# speedbench config=Q4_K_S-raw date=2026-11-21T21:20:17-08:00
+# model=/home/bschooley/models/Qwen3.8-40B-Ultimate-Heretic-Uncn-Turbo-Brilli-50x-AGI-NEO-MTP-Q4_K_S.gguf
+# command=/home/bschooley/inferzero-p4/bin/serverz -m /home/bschooley/models/Qwen3.8-40B-Ultimate-Heretic-Uncn-Turbo-Brilli-50x-AGI-NEO-MTP-Q4_K_S.gguf --slots 1 --ctx 8192 --host 127.0.0.1 --port 8080 --no-prefix-cache --session-cache-gb 0
+# mode=full repeats=3 cooldown=60s max_tokens=300
+2026-11-21 21:20:17.645 I inferzero built from source (Nov 21 2026)
+2026-11-21 21:20:17.645 I system: CachyOS, kernel 7.3.5-2-cachyos, Intel(R) Core(TM) Ultra 7 155H, 22 logical processors, RAM 30.7 GiB (29.2 free)
+2026-11-21 21:20:17.953 I GPU: Intel(R) Arc(TM) Graphics, driver 26.40.40196, 128 EUs, 2250 MHz, 28.4 GiB (shared with the CPU), XMX no, 8- and 16-lane sub-groups
+2026-11-21 21:20:38.636 I loaded in 20.5 s | 96 layers | ctx 8192 | chunk 4096 | GPU 22.88 GiB | weights W8 just-in-time
+2026-11-21 21:20:38.637 I model: qwen35, 96 layers, embedding 5120, heads 24 / kv 4, head 256, ffn 17408, vocab 248320, trained ctx 262144, file 21.16 GiB, Q4_K_S
+2026-11-21 21:20:55.222 I serving /home/bschooley/models/Qwen3.8-40B-Ultimate-Heretic-Uncn-Turbo-Brilli-50x-AGI-NEO-MTP-Q4_K_S.gguf as "Qwen3.8-40B-Ultimate-Heretic-Uncn-Turbo-Brilli-50x-AGI-NEO-MTP-Q4_K_S"
+2026-11-21 21:20:55.224 I listening on http://127.0.0.1:8080  (OpenAI API at /v1, web UI at /)
+
+[Q4_K_S-raw] phase=full prompt=code rep=1/3 | pp=155 tok (12.4 t/s) | gen=300 tok in 95.90s | srv_tps=3.13 | client_tps=3.13 | MTP=-
+  server_log: 2026-11-21 21:22:44.188 I [chatcmpl-arc1] prompt 155 tok (cached 0) 12.5 s (12.4 t/s) | gen 300 tok 95.9 s (3.13 t/s) | length | first token 12.54 s | context 455 of 8192 | slot 0
+[Q4_K_S-raw] phase=full prompt=code rep=2/3 | pp=155 tok (13.1 t/s) | gen=300 tok in 95.40s | srv_tps=3.14 | client_tps=3.14 | MTP=-
+  server_log: 2026-11-21 21:25:31.394 I [chatcmpl-arc2] prompt 155 tok (cached 0) 11.8 s (13.1 t/s) | gen 300 tok 95.4 s (3.14 t/s) | length | first token 11.79 s | context 455 of 8192 | slot 0
+[Q4_K_S-raw] phase=full prompt=code rep=3/3 | pp=155 tok (13.2 t/s) | gen=300 tok in 95.40s | srv_tps=3.14 | client_tps=3.14 | MTP=-
+  server_log: 2026-11-21 21:28:18.605 I [chatcmpl-arc3] prompt 155 tok (cached 0) 11.8 s (13.2 t/s) | gen 300 tok 95.4 s (3.14 t/s) | length | first token 11.76 s | context 455 of 8192 | slot 0
+[Q4_K_S-raw] phase=full prompt=fiction rep=1/3 | pp=131 tok (11.4 t/s) | gen=300 tok in 95.80s | srv_tps=3.13 | client_tps=3.13 | MTP=-
+  server_log: 2026-11-21 21:31:05.920 I [chatcmpl-arc4] prompt 131 tok (cached 0) 11.5 s (11.4 t/s) | gen 300 tok 95.8 s (3.13 t/s) | length | first token 11.48 s | context 431 of 8192 | slot 0
+[Q4_K_S-raw] phase=full prompt=fiction rep=2/3 | pp=131 tok (11.5 t/s) | gen=300 tok in 95.40s | srv_tps=3.15 | client_tps=3.15 | MTP=-
+  server_log: 2026-11-21 21:33:52.758 I [chatcmpl-arc5] prompt 131 tok (cached 0) 11.4 s (11.5 t/s) | gen 300 tok 95.4 s (3.15 t/s) | length | first token 11.44 s | context 431 of 8192 | slot 0
+[Q4_K_S-raw] phase=full prompt=fiction rep=3/3 | pp=131 tok (11.4 t/s) | gen=300 tok in 95.40s | srv_tps=3.14 | client_tps=3.14 | MTP=-
+  server_log: 2026-11-21 21:36:39.625 I [chatcmpl-arc6] prompt 131 tok (cached 0) 11.4 s (11.4 t/s) | gen 300 tok 95.4 s (3.14 t/s) | length | first token 11.45 s | context 431 of 8192 | slot 0
+[Q4_K_S-raw] phase=full prompt=prose rep=1/3 | pp=126 tok (10.7 t/s) | gen=300 tok in 95.60s | srv_tps=3.14 | client_tps=3.14 | MTP=-
+  server_log: 2026-11-21 21:39:27.018 I [chatcmpl-arc7] prompt 126 tok (cached 0) 11.7 s (10.7 t/s) | gen 300 tok 95.6 s (3.14 t/s) | length | first token 11.74 s | context 426 of 8192 | slot 0
+[Q4_K_S-raw] phase=full prompt=prose rep=2/3 | pp=126 tok (10.8 t/s) | gen=300 tok in 95.50s | srv_tps=3.14 | client_tps=3.14 | MTP=-
+  server_log: 2026-11-21 21:42:14.233 I [chatcmpl-arc8] prompt 126 tok (cached 0) 11.7 s (10.8 t/s) | gen 300 tok 95.5 s (3.14 t/s) | length | first token 11.70 s | context 426 of 8192 | slot 0
+[Q4_K_S-raw] phase=full prompt=prose rep=3/3 | pp=126 tok (10.8 t/s) | gen=300 tok in 95.50s | srv_tps=3.14 | client_tps=3.14 | MTP=-
+  server_log: 2026-11-21 21:45:01.479 I [chatcmpl-arc9] prompt 126 tok (cached 0) 11.7 s (10.8 t/s) | gen 300 tok 95.5 s (3.14 t/s) | length | first token 11.70 s | context 426 of 8192 | slot 0
+[Q4_K_S-raw] phase=full prompt=structured rep=1/3 | pp=340 tok (24.1 t/s) | gen=300 tok in 95.60s | srv_tps=3.14 | client_tps=3.14 | MTP=-
+  server_log: 2026-11-21 21:47:51.182 I [chatcmpl-arc10] prompt 340 tok (cached 0) 14.1 s (24.1 t/s) | gen 300 tok 95.6 s (3.14 t/s) | length | first token 14.08 s | context 640 of 8192 | slot 0
+[Q4_K_S-raw] phase=full prompt=structured rep=2/3 | pp=340 tok (24.3 t/s) | gen=300 tok in 95.60s | srv_tps=3.14 | client_tps=3.14 | MTP=-
+  server_log: 2026-11-21 21:50:40.826 I [chatcmpl-arc11] prompt 340 tok (cached 0) 14.0 s (24.3 t/s) | gen 300 tok 95.6 s (3.14 t/s) | length | first token 14.02 s | context 640 of 8192 | slot 0
+[Q4_K_S-raw] phase=full prompt=structured rep=3/3 | pp=340 tok (24.2 t/s) | gen=300 tok in 95.60s | srv_tps=3.14 | client_tps=3.14 | MTP=-
+  server_log: 2026-11-21 21:53:30.511 I [chatcmpl-arc12] prompt 340 tok (cached 0) 14.1 s (24.2 t/s) | gen 300 tok 95.6 s (3.14 t/s) | length | first token 14.07 s | context 640 of 8192 | slot 0
+
+=== SPEEDBENCH MEDIAN SUMMARY (Q4_K_S-raw) ===
+| Config | Phase | Prompt | Runs (srv tok/s) | median srv tok/s | median client tok/s | median pp tok/s | median MTP accepted (total x/y) |
+|---|---|---|---|---:|---:|---:|---|
+| Q4_K_S-raw | full (3x) | code | 3.13, 3.14, 3.14 | 3.14 | 3.14 | 13.1 | - |
+| Q4_K_S-raw | full (3x) | fiction | 3.13, 3.15, 3.14 | 3.14 | 3.14 | 11.4 | - |
+| Q4_K_S-raw | full (3x) | prose | 3.14, 3.14, 3.14 | 3.14 | 3.14 | 10.8 | - |
+| Q4_K_S-raw | full (3x) | structured | 3.14, 3.14, 3.14 | 3.14 | 3.14 | 24.2 | - |
+| **Q4_K_S-raw** | **FULL-PASS MEDIAN** | **4 full prompts (12 runs)** | — | **3.14** | **3.14** | **12.2** | **-** |
+| **Q4_K_S-raw** | **ALL-RUNS MEDIAN** | **4 prompts (12 runs)** | — | **3.14** | **3.14** | — | **-** |
