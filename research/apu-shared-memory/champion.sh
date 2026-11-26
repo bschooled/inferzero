@@ -7,4 +7,4 @@
 MODEL="${1:-$HOME/models/Qwen3.8-40B-Ultimate-Heretic-Uncn-Turbo-Brilli-50x-AGI-NEO-MTP-IQ3_M.gguf}"
 cd "$HOME/inferzero"
 exec ./bin/serverz -m "$MODEL" --ctx 8192 --mtp --mtp-drafts 3 --slots 2 \
-  --host 0.0.0.0 --port 8080
+  --host 0.0.0.0 --port 8080 "${@:2}"

@@ -5,6 +5,13 @@
 
 Every number below is either measured by us on the Spectre node (192.168.50.48; scripts in `bench/`, raw logs in `results/`), quoted from the appendix analyses with `file:line` citations we spot-verified against the clones, or explicitly marked as derived/assumed. The two appendix files are the full code-level analyses (569 + 988 lines, every claim cited).
 
+> **Iteration 1 closed (2026-11-22, critic review pass).** The §6 queue P0-P5 was
+> executed end-to-end on this node: P4 (reduced-vocab draft head, `--mtp-draft-vocab
+> 32768`) **POSITIVE** — champion 7.52 -> 8.19 tok/s paired; P0, P1, P2, P3, P5
+> honest verdicts with their own METHOD/NUMBERS/VERDICT files (`P0-*.md … P5-*.md`,
+> `BASELINE.md`, `LADDER-P4.md`, `LADDER-FINAL.md`, `QUALITY-GATES.md`). What to run
+> next is in **[NEXT-ITERATION.md](NEXT-ITERATION.md)**.
+
 ---
 
 ## 1. The hardware, measured from three sides
